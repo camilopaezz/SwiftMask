@@ -231,6 +231,8 @@ mod tests {
         load: &dyn Fn(&crate::models::ModelEntry) -> Result<Vec<u8>, AppError>,
     ) -> impl Fn(&str, &str, &Array4<f32>) -> Result<ArrayD<f32>, AppError> + '_ {
         move |model_id, ep, tensor| {
+            // Serialize against inference session-cache tests (global SESSION_CACHE).
+            let _lock = crate::inference::lock_session_cache_for_test();
             let model = crate::models::find_model(model_id)?;
             crate::inference::with_session(
                 model_id,
@@ -590,6 +592,7 @@ mod tests {
             if ep.eq_ignore_ascii_case("directml") {
                 return Err(crate::error::inference_error("CUDA out of memory"));
             }
+            let _lock = crate::inference::lock_session_cache_for_test();
             let model = crate::models::find_model(model_id)?;
             crate::inference::with_session(
                 model_id,
@@ -774,6 +777,7 @@ mod tests {
                 return Err(crate::error::inference_error("CUDA out of memory"));
             }
             // Must not be reached when cancel fires in on_fallback.
+            let _lock = crate::inference::lock_session_cache_for_test();
             let model = crate::models::find_model(model_id)?;
             crate::inference::with_session(
                 model_id,

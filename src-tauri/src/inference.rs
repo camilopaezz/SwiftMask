@@ -249,6 +249,24 @@ fn take_cached_session(
     session
 }
 
+/// Serializes tests that touch the process-global session cache.
+///
+/// `with_session` can drop the cache mutex while loading; concurrent tests that
+/// call `invalidate_all_sessions` (or OOM wipe) in that window produce flaky
+/// "session missing from cache after reload" failures under multi-threaded
+/// `cargo test` (seen on Windows CI). Hold this for the full body of any test
+/// that uses `with_session` / `invalidate_all_sessions` / `insert_session_for_test`.
+#[cfg(test)]
+static SESSION_CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+/// Hold for the full body of any test that reads/writes `SESSION_CACHE`.
+#[cfg(test)]
+pub fn lock_session_cache_for_test() -> std::sync::MutexGuard<'static, ()> {
+    SESSION_CACHE_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
+
 /// Test-only: leave a live session under `key` without going through `with_session`
 /// (which unloads on return). Used to exercise multi-key OOM wipe.
 #[cfg(test)]
@@ -368,6 +386,7 @@ mod tests {
 
     #[test]
     fn with_session_accepts_distinct_model_keys() {
+        let _lock = lock_session_cache_for_test();
         let _ = invalidate_all_sessions();
         let r1 = with_session("u2netp", EP_CPU, || Ok(U2NETP_MODEL_BYTES.to_vec()), |session| {
             Ok(session.inputs().len())
@@ -385,6 +404,7 @@ mod tests {
 
     #[test]
     fn successful_run_drops_cached_session() {
+        let _lock = lock_session_cache_for_test();
         let _ = invalidate_all_sessions();
         let mut loads = 0usize;
 
@@ -418,6 +438,7 @@ mod tests {
     fn multi_run_inside_one_with_session_loads_once() {
         // Batch roadmap: keep the session for many images by looping inside the
         // closure; load_bytes runs once, then session drops when the closure ends.
+        let _lock = lock_session_cache_for_test();
         let _ = invalidate_all_sessions();
         let mut loads = 0usize;
         let runs = with_session(
@@ -462,6 +483,7 @@ mod tests {
 
     #[test]
     fn failed_run_drops_cached_session() {
+        let _lock = lock_session_cache_for_test();
         let _ = invalidate_all_sessions();
         let mut load_count = 0usize;
         let load = || {
@@ -490,6 +512,7 @@ mod tests {
 
     #[test]
     fn oom_run_clears_all_cached_sessions() {
+        let _lock = lock_session_cache_for_test();
         let _ = invalidate_all_sessions();
 
         // Success-path unload empties the map after each with_session, so seed a
@@ -530,6 +553,7 @@ mod tests {
 
     #[test]
     fn invalidate_all_sessions_forces_reload() {
+        let _lock = lock_session_cache_for_test();
         let _ = invalidate_all_sessions();
         let mut loads = 0usize;
         with_session(
