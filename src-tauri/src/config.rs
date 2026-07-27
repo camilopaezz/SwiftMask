@@ -8,9 +8,7 @@ use crate::error::AppError;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub execution_provider: Option<String>,
-    pub model_id: Option<String>,
     pub output_dir: Option<String>,
-    pub platform: Option<String>,
 }
 
 impl Config {
@@ -34,18 +32,20 @@ pub fn load_config(app: &AppHandle) -> Result<Config, AppError> {
     if !path.exists() {
         return Ok(Config::default());
     }
-    let bytes = std::fs::read(&path)?;
-    let config = serde_json::from_slice(&bytes)?;
+    let bytes = std::fs::read(&path).map_err(crate::error::config_io_error)?;
+    let config = serde_json::from_slice(&bytes)
+        .map_err(|e| AppError::Config(format!("parse config: {e}")))?;
     Ok(config)
 }
 
 pub fn save_config(app: &AppHandle, config: &Config) -> Result<(), AppError> {
     let path = config_path(app)?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent).map_err(crate::error::config_io_error)?;
     }
-    let bytes = serde_json::to_vec_pretty(config)?;
-    std::fs::write(&path, bytes)?;
+    let bytes = serde_json::to_vec_pretty(config)
+        .map_err(|e| AppError::Config(format!("serialize config: {e}")))?;
+    std::fs::write(&path, bytes).map_err(crate::error::config_io_error)?;
     Ok(())
 }
 
@@ -63,13 +63,24 @@ mod tests {
     fn config_serde_round_trip() {
         let config = Config {
             execution_provider: Some("cuda".to_string()),
-            model_id: Some("u2netp".to_string()),
             output_dir: Some("/tmp".to_string()),
-            platform: Some("linux".to_string()),
         };
         let json = serde_json::to_string(&config).unwrap();
         let parsed: Config = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.execution_provider(), "cuda");
-        assert_eq!(parsed.model_id, Some("u2netp".to_string()));
+        assert_eq!(parsed.output_dir, Some("/tmp".to_string()));
+    }
+
+    #[test]
+    fn config_ignores_unknown_fields() {
+        let json = r#"{
+            "execution_provider": "cpu",
+            "output_dir": null,
+            "model_id": "u2netp",
+            "platform": "linux"
+        }"#;
+        let parsed: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.execution_provider(), "cpu");
+        assert_eq!(parsed.output_dir, None);
     }
 }

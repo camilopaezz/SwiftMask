@@ -22,10 +22,6 @@ function getE2EAliases(): Record<string, string> {
       __dirname,
       "e2e/mocks/tauri-window.ts",
     ),
-    "@tauri-apps/plugin-fs": path.resolve(
-      __dirname,
-      "e2e/mocks/tauri-plugin-fs.ts",
-    ),
     "@tauri-apps/plugin-dialog": path.resolve(
       __dirname,
       "e2e/mocks/tauri-plugin-dialog.ts",

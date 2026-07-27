@@ -14,14 +14,24 @@ describe("deriveOutputPath", () => {
     ).toBe("/tmp/outputs/photo-nobg-rmbg-2.0.png");
   });
 
-  it("handles windows-style input paths", () => {
+  it("handles windows-style input paths with consistent separators", () => {
     expect(
       deriveOutputPath(
         "C:\\Users\\pics\\photo.jpg",
         "D:\\Outputs",
         "isnet-general-use",
       ),
-    ).toBe("D:\\Outputs/photo-nobg-isnet-general-use.png");
+    ).toBe("D:\\Outputs\\photo-nobg-isnet-general-use.png");
+  });
+
+  it("keeps windows separators when output defaults next to input", () => {
+    expect(
+      deriveOutputPath(
+        "C:\\TRABAJOS 2021\\WhatsApp Image.jpg",
+        null,
+        "isnet-general-use",
+      ),
+    ).toBe("C:\\TRABAJOS 2021\\WhatsApp Image-nobg-isnet-general-use.png");
   });
 
   it("strips trailing separators from outputDir", () => {

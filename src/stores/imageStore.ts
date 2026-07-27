@@ -8,6 +8,12 @@ export type ImageStatus =
   | "error"
   | "cancelled";
 
+/** Structured process error (wire `{ code, message }`). */
+export type ImageError = {
+  code: string;
+  message: string;
+};
+
 export type ImageItem = {
   id: string;
   inputPath: string;
@@ -15,7 +21,7 @@ export type ImageItem = {
   status: ImageStatus;
   progress: number;
   stage: string | null;
-  error: string | null;
+  error: ImageError | null;
 };
 
 export type ImageState = {

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 pub const INFERENCE_PROGRESS: &str = "inference:progress";
 pub const INFERENCE_DONE: &str = "inference:done";
 pub const INFERENCE_ERROR: &str = "inference:error";
+pub const INFERENCE_FALLBACK: &str = "inference:fallback";
 pub const MODEL_DOWNLOAD: &str = "model:download";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,7 +41,18 @@ pub struct RuntimeInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InferenceErrorPayload {
     pub id: String,
+    /// Stable catalog code (see `error::code`).
+    pub code: String,
+    /// Technical detail for diagnostics / unmapped FE fallback.
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InferenceFallbackPayload {
+    pub id: String,
+    pub reason: String,
+    pub from_ep: String,
+    pub to_ep: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

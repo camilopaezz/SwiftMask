@@ -1,8 +1,9 @@
 [package]
 name = "swiftmask"
-version = "0.1.0"
+version = "0.9.0-beta.1"
 description = "SwiftMask — local background removal desktop app"
 authors = ["you"]
+license = "MIT"
 edition = "2021"
 rust-version = "1.88"
 default-run = "swiftmask"
@@ -19,15 +20,15 @@ path = "src/bin/gen_model_registry.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.5", features = [] }
+tauri = { version = "2.11.5", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
-tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp", "bmp"] }
-imageproc = { version = "0.27.0", default-features = false }
 ndarray = "0.17"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 sha2 = "0.10"
@@ -42,7 +43,12 @@ tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
 ort = { version = "2.0.0-rc.12", features = ["directml", "download-binaries"] }
-wgpu = "24"
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_DXCore",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+] }
 
 [target.'cfg(not(windows))'.dependencies]
 ort = { version = "2.0.0-rc.12", features = ["cuda", "download-binaries"] }

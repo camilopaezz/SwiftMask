@@ -40,12 +40,21 @@ export type RuntimeInfo = {
 
 export type InferenceErrorPayload = {
   id: string;
+  code: string;
   message: string;
+};
+
+export type InferenceFallbackPayload = {
+  id: string;
+  reason: string;
+  from_ep: string;
+  to_ep: string;
 };
 
 export const EVENT_PROGRESS = "inference:progress";
 export const EVENT_DONE = "inference:done";
 export const EVENT_ERROR = "inference:error";
+export const EVENT_FALLBACK = "inference:fallback";
 export const EVENT_MODEL_DOWNLOAD = "model:download";
 
 export type GpuInfo = {
@@ -67,9 +76,7 @@ export type BenchmarkResult = {
 
 export type Config = {
   execution_provider: string | null;
-  model_id: string | null;
   output_dir: string | null;
-  platform: string | null;
 };
 
 export type ModelDownloadPayload = {
@@ -85,6 +92,10 @@ export function invokeListModels(): Promise<ModelMeta[]> {
 
 export function invokeDownloadModel(modelId: string): Promise<void> {
   return tauriInvoke("download_model", { modelId });
+}
+
+export function invokeCancelDownload(): Promise<void> {
+  return tauriInvoke("cancel_download");
 }
 
 export function listenModelDownload(
@@ -115,10 +126,6 @@ export function invokeGetRuntimeInfo(): Promise<RuntimeInfo> {
   return tauriInvoke("get_runtime_info");
 }
 
-export function invokeSetConfig(config: Config): Promise<void> {
-  return tauriInvoke("set_config", { config });
-}
-
 export function invokeRemoveImageBackground(
   args: ProcessingJob,
 ): Promise<void> {
@@ -129,8 +136,13 @@ export function invokePickOutputDir(): Promise<string | null> {
   return tauriInvoke("pick_output_dir");
 }
 
-export function invokeCancelInference(): Promise<void> {
-  return tauriInvoke("cancel_inference");
+export function invokeCancelInference(jobId: string): Promise<void> {
+  return tauriInvoke("cancel_inference", { jobId });
+}
+
+/** Native path existence check (no frontend fs scope). */
+export function invokePathExists(path: string): Promise<boolean> {
+  return tauriInvoke("path_exists", { path });
 }
 
 export function listenInferenceProgress(
@@ -153,6 +165,14 @@ export function listenInferenceError(
   handler: (payload: InferenceErrorPayload) => void,
 ): Promise<() => void> {
   return tauriListen<InferenceErrorPayload>(EVENT_ERROR, (event) =>
+    handler(event.payload),
+  );
+}
+
+export function listenInferenceFallback(
+  handler: (payload: InferenceFallbackPayload) => void,
+): Promise<() => void> {
+  return tauriListen<InferenceFallbackPayload>(EVENT_FALLBACK, (event) =>
     handler(event.payload),
   );
 }

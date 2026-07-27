@@ -1,24 +1,10 @@
-import { open } from "@tauri-apps/plugin-dialog";
-import { acceptDrop, clearCurrent, isProcessBusy } from "../lib/currentImage";
+import { clearCurrent, isProcessBusy } from "../lib/currentImage";
+import { openImageFile } from "../lib/openImage";
 import { useImageStore } from "../stores/imageStore";
 import { useSettingsStore } from "../stores/settingsStore";
 
 function fileName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
-}
-
-async function pickImagePath(): Promise<string | null> {
-  const selected = await open({
-    multiple: false,
-    filters: [
-      {
-        name: "Images",
-        extensions: ["png", "jpg", "jpeg", "webp", "bmp"],
-      },
-    ],
-  });
-  if (selected == null) return null;
-  return Array.isArray(selected) ? (selected[0] ?? null) : selected;
 }
 
 export function FileBlock() {
@@ -30,15 +16,7 @@ export function FileBlock() {
   const busy = current?.status === "processing" || isProcessBusy();
 
   const handleSelect = async () => {
-    if (isProcessBusy()) return;
-    try {
-      const path = await pickImagePath();
-      if (!path) return;
-      if (isProcessBusy()) return;
-      acceptDrop([path], { mode, outputDir });
-    } catch (err) {
-      console.error("open image dialog failed", err);
-    }
+    await openImageFile({ mode, outputDir });
   };
 
   const handleRemove = () => {
@@ -53,6 +31,7 @@ export function FileBlock() {
           <button
             type="button"
             className="btn-primary"
+            title="Select image (Ctrl+O)"
             onClick={() => void handleSelect()}
           >
             Select image
@@ -70,6 +49,7 @@ export function FileBlock() {
       <div className="file-block-actions">
         <button
           type="button"
+          title="Change image (Ctrl+O)"
           onClick={() => void handleSelect()}
           disabled={busy}
         >

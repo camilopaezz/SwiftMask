@@ -1,8 +1,9 @@
-import { readFile } from "@tauri-apps/plugin-fs";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -15,90 +16,12 @@ export type PreviewCanvasProps = {
   isDragging?: boolean;
 };
 
-function mimeFromPath(path: string): string {
-  const lower = path.toLowerCase();
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".bmp")) return "image/bmp";
-  if (lower.endsWith(".gif")) return "image/gif";
-  return "image/png";
-}
-
-async function loadImageUrl(path: string | null): Promise<string | null> {
-  if (!path) return null;
-  const bytes = await readFile(path);
-  const blob = new Blob([bytes], { type: mimeFromPath(path) });
-  return URL.createObjectURL(blob);
-}
-
 /**
- * Load a path into a blob URL. Keeps the previous URL visible until the next
- * one is ready, then revokes the prior URL (avoids broken-image flicker).
+ * Serve local files via Tauri asset protocol (no scoped plugin-fs read).
+ * Works for any user path once assetProtocol.scope allows it.
  */
-function useObjectUrl(path: string | null): string | null {
-  const [url, setUrl] = useState<string | null>(null);
-  const displayedRef = useRef<string | null>(null);
-  const revokeTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!path) {
-      if (revokeTimerRef.current != null) {
-        window.clearTimeout(revokeTimerRef.current);
-        revokeTimerRef.current = null;
-      }
-      if (displayedRef.current) {
-        URL.revokeObjectURL(displayedRef.current);
-        displayedRef.current = null;
-      }
-      setUrl(null);
-      return;
-    }
-
-    loadImageUrl(path)
-      .then((next) => {
-        if (cancelled) {
-          if (next) URL.revokeObjectURL(next);
-          return;
-        }
-        const prev = displayedRef.current;
-        displayedRef.current = next;
-        setUrl(next);
-        if (prev && prev !== next) {
-          if (revokeTimerRef.current != null) {
-            window.clearTimeout(revokeTimerRef.current);
-          }
-          const stale = prev;
-          revokeTimerRef.current = window.setTimeout(() => {
-            URL.revokeObjectURL(stale);
-            revokeTimerRef.current = null;
-          }, 1000);
-        }
-      })
-      .catch(() => {
-        // Keep previous image if reload fails.
-      });
-
-    return () => {
-      cancelled = true;
-      if (revokeTimerRef.current != null) {
-        window.clearTimeout(revokeTimerRef.current);
-        revokeTimerRef.current = null;
-      }
-    };
-  }, [path]);
-
-  useEffect(() => {
-    return () => {
-      if (displayedRef.current) {
-        URL.revokeObjectURL(displayedRef.current);
-        displayedRef.current = null;
-      }
-    };
-  }, []);
-
-  return url;
+function useLocalFileUrl(path: string | null): string | null {
+  return useMemo(() => (path ? convertFileSrc(path) : null), [path]);
 }
 
 /** Natural width/height ratio once the image has loaded (null while pending). */
@@ -256,8 +179,8 @@ export function PreviewCanvas({
   canCompare = false,
   isDragging = false,
 }: PreviewCanvasProps) {
-  const inputUrl = useObjectUrl(inputPath);
-  const outputUrl = useObjectUrl(canCompare ? outputPath : null);
+  const inputUrl = useLocalFileUrl(inputPath);
+  const outputUrl = useLocalFileUrl(canCompare ? outputPath : null);
   const showCompare = Boolean(
     canCompare && inputPath && outputPath && inputUrl && outputUrl,
   );

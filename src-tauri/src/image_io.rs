@@ -3,20 +3,20 @@ use image::{DynamicImage, GrayImage, ImageFormat, RgbImage, RgbaImage};
 use crate::error::AppError;
 
 pub fn decode(bytes: &[u8]) -> Result<DynamicImage, AppError> {
-    image::load_from_memory(bytes).map_err(|e| AppError::ImageIo(e.to_string()))
+    image::load_from_memory(bytes).map_err(|e| crate::error::image_decode_error(e.to_string()))
 }
 
 pub fn encode_png(image: &DynamicImage) -> Result<Vec<u8>, AppError> {
     let mut buf = Vec::new();
     image
         .write_to(&mut std::io::Cursor::new(&mut buf), ImageFormat::Png)
-        .map_err(|e| AppError::ImageIo(e.to_string()))?;
+        .map_err(|e| crate::error::image_encode_error(e.to_string()))?;
     Ok(buf)
 }
 
 pub fn encode_png_rgba(rgb: &RgbImage, alpha: &GrayImage) -> Result<Vec<u8>, AppError> {
     if rgb.dimensions() != alpha.dimensions() {
-        return Err(AppError::ImageIo(format!(
+        return Err(crate::error::image_encode_error(format!(
             "rgb/alpha size mismatch: {:?} vs {:?}",
             rgb.dimensions(),
             alpha.dimensions()
@@ -31,7 +31,7 @@ pub fn encode_png_rgba(rgb: &RgbImage, alpha: &GrayImage) -> Result<Vec<u8>, App
     let mut buf = Vec::new();
     rgba
         .write_to(&mut std::io::Cursor::new(&mut buf), ImageFormat::Png)
-        .map_err(|e| AppError::ImageIo(e.to_string()))?;
+        .map_err(|e| crate::error::image_encode_error(e.to_string()))?;
     Ok(buf)
 }
 

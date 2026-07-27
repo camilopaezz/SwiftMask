@@ -7,14 +7,18 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::config::Config;
 use crate::error::AppError;
+use ndarray::Array4;
+
 use crate::events::{
-    InferenceDonePayload, InferenceErrorPayload, InferenceProgressPayload, JobTimings,
-    RuntimeInfo, INFERENCE_DONE, INFERENCE_ERROR, INFERENCE_PROGRESS,
+    InferenceDonePayload, InferenceErrorPayload, InferenceFallbackPayload,
+    InferenceProgressPayload, JobTimings, RuntimeInfo, INFERENCE_DONE, INFERENCE_ERROR,
+    INFERENCE_FALLBACK, INFERENCE_PROGRESS,
 };
 use crate::gpu::{BenchmarkResult, GpuInfo};
 use crate::job::{JobDeps, JobSink, ProcessingJob};
+use crate::download::DownloadState;
 use crate::models::ModelMeta;
-use crate::processing::ProcessingState;
+use crate::processing::{ProcessingSlotGuard, ProcessingState};
 
 struct AppJobSink {
     app: AppHandle,
@@ -32,7 +36,7 @@ impl JobSink for AppJobSink {
                     pct,
                 },
             )
-            .map_err(|e| AppError::Inference(e.to_string()))
+            .map_err(|e| crate::error::inference_error(e.to_string()))
     }
 
     fn on_done(&self, output_path: &str, timings: &JobTimings) -> Result<(), AppError> {
@@ -45,17 +49,32 @@ impl JobSink for AppJobSink {
                     timings: timings.clone(),
                 },
             )
-            .map_err(|e| AppError::Inference(e.to_string()))
+            .map_err(|e| crate::error::inference_error(e.to_string()))
     }
 
-    fn on_error(&self, message: &str) {
+    fn on_error(&self, err: &AppError) {
         let _ = self.app.emit(
             INFERENCE_ERROR,
             InferenceErrorPayload {
                 id: self.id.clone(),
-                message: message.to_string(),
+                code: crate::error::error_code(err).to_string(),
+                message: crate::error::error_message(err),
             },
         );
+    }
+
+    fn on_fallback(&self, reason: &str, from_ep: &str, to_ep: &str) -> Result<(), AppError> {
+        self.app
+            .emit(
+                INFERENCE_FALLBACK,
+                InferenceFallbackPayload {
+                    id: self.id.clone(),
+                    reason: reason.to_string(),
+                    from_ep: from_ep.to_string(),
+                    to_ep: to_ep.to_string(),
+                },
+            )
+            .map_err(|e| crate::error::inference_error(e.to_string()))
     }
 }
 
@@ -63,7 +82,7 @@ impl JobSink for AppJobSink {
 pub async fn detect_gpu() -> Result<GpuInfo, AppError> {
     tauri::async_runtime::spawn_blocking(crate::gpu::detect_gpu)
         .await
-        .map_err(|e| AppError::Inference(e.to_string()))?
+        .map_err(|e| crate::error::inference_error(e.to_string()))?
 }
 
 #[tauri::command]
@@ -71,7 +90,7 @@ pub async fn run_benchmark(app: AppHandle) -> Result<BenchmarkResult, AppError> 
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || crate::gpu::run_benchmark(&app))
         .await
-        .map_err(|e| AppError::Inference(e.to_string()))?
+        .map_err(|e| crate::error::inference_error(e.to_string()))?
 }
 
 #[tauri::command]
@@ -99,8 +118,22 @@ pub async fn list_models(app: AppHandle) -> Result<Vec<ModelMeta>, AppError> {
 }
 
 #[tauri::command]
-pub async fn download_model(app: AppHandle, model_id: String) -> Result<(), AppError> {
-    crate::models::download_model(&app, &model_id).await
+pub async fn download_model(
+    app: AppHandle,
+    state: State<'_, Arc<DownloadState>>,
+    model_id: String,
+) -> Result<(), AppError> {
+    crate::models::download_model(&app, state.inner(), &model_id).await
+}
+
+#[tauri::command]
+pub async fn cancel_download(state: State<'_, Arc<DownloadState>>) -> Result<(), AppError> {
+    if !state.is_busy() {
+        return Ok(());
+    }
+    state.cancel();
+    state.wait_until_idle().await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -109,10 +142,14 @@ pub async fn remove_image_background(
     state: State<'_, Arc<ProcessingState>>,
     args: ProcessingJob,
 ) -> Result<(), AppError> {
-    state.reset();
+    state.try_acquire(&args.id)?;
     let processing_state = state.inner().clone();
+    // Clone for JoinError recovery — the blocking task moves its own copy.
+    let processing_state_for_join = processing_state.clone();
     let app_handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // Always clear busy — success, cancel, error, or panic inside catch_unwind.
+        let _guard = ProcessingSlotGuard(processing_state.clone());
         let job_id = args.id.clone();
         let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
             let sink = AppJobSink {
@@ -126,11 +163,7 @@ pub async fn remove_image_background(
                 Ok(crate::config::load_config(&app_for_ep)?.execution_provider())
             };
             let model_is_ready = |model: &crate::models::ModelEntry| {
-                if model.bundled {
-                    Ok(true)
-                } else {
-                    Ok(crate::models::model_cache_path(&app_for_ready, model)?.exists())
-                }
+                crate::models::model_is_cached(&app_for_ready, model)
             };
             let load_model_bytes = |model: &crate::models::ModelEntry| {
                 if model.bundled {
@@ -142,24 +175,43 @@ pub async fn remove_image_background(
                     )?)?)
                 }
             };
+            let run_inference = |model_id: &str, ep: &str, tensor: &Array4<f32>| {
+                let model = crate::models::find_model(model_id)?;
+                crate::inference::with_session(
+                    model_id,
+                    ep,
+                    || load_model_bytes(&model),
+                    |session| crate::inference::run(session, tensor),
+                )
+            };
             let deps = JobDeps {
                 sink: &sink,
                 execution_provider: &execution_provider,
                 model_is_ready: &model_is_ready,
-                load_model_bytes: &load_model_bytes,
+                run_inference: &run_inference,
             };
             crate::job::run(&args, &processing_state, &deps)
         }));
         match result {
             Ok(Ok(())) => {}
-            Ok(Err(_)) => {
-                // job::run already called sink.on_error
+            Ok(Err(err)) => {
+                // job::run already called sink.on_error. OOM path also drops
+                // sessions inside with_session; belt-and-suspenders here so a
+                // future error site that skips that still releases multi-GB.
+                if crate::inference::is_likely_oom(&err) {
+                    let _ = crate::inference::invalidate_all_sessions();
+                }
             }
             Err(_) => {
+                // Panic can leave the ORT/DirectML session in a bad state with
+                // committed GPU/system memory. Destroy the cache so the idle
+                // process does not keep multi-GB around.
+                let _ = crate::inference::invalidate_all_sessions();
                 let _ = app_handle.emit(
                     INFERENCE_ERROR,
                     InferenceErrorPayload {
                         id: job_id,
+                        code: crate::error::code::UNKNOWN.to_string(),
                         message: "worker panic".to_string(),
                     },
                 );
@@ -167,14 +219,38 @@ pub async fn remove_image_background(
         }
     })
     .await
-    .map_err(|e| AppError::Inference(e.to_string()))?;
+    .map_err(|e| {
+        // JoinError path: worker may have panicked before `_guard` ran, or
+        // the runtime aborted the task — ensure the slot is free either way.
+        processing_state_for_join.release();
+        crate::error::inference_error(e.to_string())
+    })?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn cancel_inference(state: State<'_, Arc<ProcessingState>>) -> Result<(), AppError> {
-    state.cancel();
+pub async fn cancel_inference(
+    state: State<'_, Arc<ProcessingState>>,
+    job_id: String,
+) -> Result<(), AppError> {
+    // Scoped: a late cancel for a finished job must not trip the next run.
+    // Only wait when this job was actually active — a stale id must not block
+    // on an unrelated worker holding the slot.
+    if state.cancel_job(&job_id) {
+        // Block until the worker releases the slot so a follow-up Process cannot
+        // race the still-running job (RAM spike from overlapping inference).
+        // Cancel is cooperative (checked between pipeline stages); long ORT
+        // inferring work may delay return until that stage finishes.
+        state.wait_until_idle().await;
+    }
     Ok(())
+}
+
+/// Check whether a path exists using native FS (not the scoped frontend plugin).
+/// Required for overwrite prompts when the output dir is outside `$HOME` etc.
+#[tauri::command]
+pub async fn path_exists(path: String) -> bool {
+    std::path::Path::new(&path).exists()
 }
 
 #[tauri::command]
@@ -225,9 +301,4 @@ pub async fn get_runtime_info() -> Result<RuntimeInfo, AppError> {
 #[tauri::command]
 pub async fn get_config(app: AppHandle) -> Result<Config, AppError> {
     crate::config::load_config(&app)
-}
-
-#[tauri::command]
-pub async fn set_config(app: AppHandle, config: Config) -> Result<(), AppError> {
-    crate::config::save_config(&app, &config)
 }

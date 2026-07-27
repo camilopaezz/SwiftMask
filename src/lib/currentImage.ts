@@ -1,17 +1,22 @@
 import { ask } from "@tauri-apps/plugin-dialog";
-import { exists } from "@tauri-apps/plugin-fs";
 import { type ImageItem, imageStore } from "../stores/imageStore";
 import { settingsStore } from "../stores/settingsStore";
+import { uiStore } from "../stores/uiStore";
+import { formatFallbackNotice } from "./errorCopy";
 import { shouldProceedWithOverwrite } from "./overwrite";
+import { ERROR_CODES, parseAppError } from "./parseAppError";
 import { deriveOutputPath } from "./path";
 import {
   type InferenceDonePayload,
   type InferenceErrorPayload,
+  type InferenceFallbackPayload,
   type InferenceProgressPayload,
   invokeCancelInference,
+  invokePathExists,
   invokeRemoveImageBackground,
   listenInferenceDone,
   listenInferenceError,
+  listenInferenceFallback,
   listenInferenceProgress,
 } from "./tauri";
 
@@ -30,7 +35,7 @@ export type StartProcessDeps = {
 };
 
 export type CancelDeps = {
-  cancelInference: () => Promise<void>;
+  cancelInference: (jobId: string) => Promise<void>;
 };
 
 export type StartProcessResult =
@@ -45,9 +50,33 @@ const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "bmp"]);
 /** True while overwrite confirm / start handoff is in flight (before status is processing). */
 let processGate = false;
 
+/**
+ * True while cancel is waiting for the backend inference slot to free.
+ * Keeps Process disabled even after optimistic "cancelled" status so a second
+ * click cannot overlap the still-running worker (RAM spike).
+ */
+let cancelGate = false;
+
+/**
+ * Backend job id for the active run (UUID per Process click — not the image id).
+ * Events are keyed on this so cancel → re-run cannot clobber the new job.
+ */
+let activeRunId: string | null = null;
+
+/** Run ids the user cancelled; late done/error/progress for these are ignored. */
+const discardedRunIds = new Set<string>();
+
 /** Test-only: clear gate left open by aborted/timed-out startProcess. */
 export function resetProcessGateForTests(): void {
   processGate = false;
+  cancelGate = false;
+  activeRunId = null;
+  discardedRunIds.clear();
+}
+
+/** Test-only: bind event handlers to a run id without going through startProcess. */
+export function setActiveRunIdForTests(runId: string | null): void {
+  activeRunId = runId;
 }
 
 function getExtension(path: string): string {
@@ -59,9 +88,49 @@ function isImageFile(path: string): boolean {
   return IMAGE_EXTENSIONS.has(getExtension(path));
 }
 
-/** Domain busy: backend processing or overwrite/start handoff in flight. */
+/**
+ * Resolve whether a backend event should mutate image state.
+ *
+ * - Prefer `activeRunId` when set (prod Process path).
+ * - Fall back to matching `current.id` for tests that skip startProcess.
+ * - Terminal events (done/error/fallback) remove discarded run ids so the set
+ *   does not grow; progress leaves them (cancel may still hold the slot).
+ * - Progress only applies while status is `processing` (no late resurrection).
+ * - Done/error/fallback ignore already-cancelled UI (optimistic cancel).
+ */
+function resolveRunEvent(
+  runId: string,
+  opts: { terminal: boolean; requireProcessing: boolean },
+): ImageItem | null {
+  if (discardedRunIds.has(runId)) {
+    if (opts.terminal) discardedRunIds.delete(runId);
+    return null;
+  }
+  const current = imageStore.getState().current;
+  if (!current) return null;
+
+  if (activeRunId !== null) {
+    if (runId !== activeRunId) return null;
+  } else if (current.id !== runId) {
+    return null;
+  }
+
+  if (opts.requireProcessing) {
+    if (current.status !== "processing") return null;
+  } else if (current.status === "cancelled") {
+    return null;
+  }
+
+  return current;
+}
+
+/** Domain busy: backend processing, cancel wait, or overwrite/start handoff. */
 export function isProcessBusy(): boolean {
-  return processGate || imageStore.getState().current?.status === "processing";
+  return (
+    processGate ||
+    cancelGate ||
+    imageStore.getState().current?.status === "processing"
+  );
 }
 
 export function acceptDrop(
@@ -149,6 +218,9 @@ export async function startProcess(
       settings.mode,
     );
 
+    // Per-run id so late events from a cancelled attempt cannot match a re-run.
+    const runId = crypto.randomUUID();
+    activeRunId = runId;
     imageStore.getState().patch({
       status: "processing",
       progress: 0,
@@ -159,30 +231,92 @@ export async function startProcess(
 
     try {
       await deps.removeBackground({
-        id: latest.id,
+        id: runId,
         inputPath: latest.inputPath,
         outputPath: finalOutputPath,
         modelId: settings.mode,
       });
       return "started";
-    } catch {
+    } catch (err: unknown) {
+      // e.g. backend "already processing" — do not leave status stuck on processing.
+      if (activeRunId === runId) {
+        activeRunId = null;
+      }
       const still = imageStore.getState().current;
       if (still?.id === startedId && still.status === "processing") {
-        imageStore.getState().patch({
-          status: "error",
-          stage: null,
-          error: "command failed",
-        });
+        const parsed = parseAppError(err);
+        if (parsed.code === ERROR_CODES.cancelled) {
+          imageStore.getState().patch({
+            status: "cancelled",
+            stage: null,
+            error: null,
+          });
+        } else {
+          imageStore.getState().patch({
+            status: "error",
+            stage: null,
+            error: { code: parsed.code, message: parsed.message },
+          });
+        }
       }
       return "failed";
     }
   } finally {
     processGate = false;
+    // Done/error events often land before this invoke returns. FileBlock (and
+    // anything else) that ORs isProcessBusy() into disabled state will still
+    // see processGate=true on that render and never re-read the gate unless we
+    // nudge store subscribers after clearing it (same pattern as cancelProcess).
+    const still = imageStore.getState().current;
+    if (still?.id === startedId) {
+      imageStore.getState().patch({ status: still.status });
+    }
   }
 }
 
-export function cancelProcess(deps: CancelDeps): void {
-  deps.cancelInference().catch(() => {});
+/**
+ * Optimistically marks the UI cancelled, then waits for backend cancel to free
+ * the inference slot before allowing another Process.
+ */
+export async function cancelProcess(deps: CancelDeps): Promise<void> {
+  const current = imageStore.getState().current;
+  if (current?.status !== "processing") return;
+  if (cancelGate) return;
+
+  const runId = activeRunId ?? current.id;
+  discardedRunIds.add(runId);
+  activeRunId = null;
+  cancelGate = true;
+  imageStore.getState().patch({
+    status: "cancelled",
+    progress: 0,
+    stage: null,
+    error: null,
+  });
+  try {
+    await deps.cancelInference(runId);
+  } catch {
+    // Slot may still be held — keep cancelGate so Process stays blocked.
+    // Best-effort retry once; if that fails, leave the gate set so we do not
+    // re-enable start while the backend may still be busy (backend single-flight
+    // still rejects overlap). User can retry cancel; tests use resetProcessGateForTests.
+    try {
+      await deps.cancelInference(runId);
+    } catch {
+      // Nudge subscribers so UI reflects cancelled + still-busy gate.
+      const still = imageStore.getState().current;
+      if (still) {
+        imageStore.getState().patch({ status: still.status });
+      }
+      return;
+    }
+  }
+  cancelGate = false;
+  // Nudge store subscribers (FileBlock, etc.) so they re-read isProcessBusy().
+  const still = imageStore.getState().current;
+  if (still) {
+    imageStore.getState().patch({ status: still.status });
+  }
 }
 
 /** Returns false if clear was rejected because a process is busy. */
@@ -197,10 +331,14 @@ export function applyProgress(payload: {
   stage: string;
   pct: number;
 }): void {
-  const current = imageStore.getState().current;
-  if (!current || current.id !== payload.id) return;
-  // Do not resurrect done/error/ready via late progress events.
-  if (current.status !== "processing") return;
+  if (
+    !resolveRunEvent(payload.id, {
+      terminal: false,
+      requireProcessing: true,
+    })
+  ) {
+    return;
+  }
   imageStore.getState().patch({
     status: "processing",
     progress: payload.pct,
@@ -208,25 +346,76 @@ export function applyProgress(payload: {
   });
 }
 
-export function applyDone(payload: InferenceDonePayload): void {
-  const current = imageStore.getState().current;
-  if (!current || current.id !== payload.id) return;
+/** @returns true if the done event was applied to image state. */
+export function applyDone(payload: InferenceDonePayload): boolean {
+  if (
+    !resolveRunEvent(payload.id, {
+      terminal: true,
+      requireProcessing: false,
+    })
+  ) {
+    return false;
+  }
   imageStore.getState().patch({
     status: "done",
     progress: 100,
     stage: null,
     outputPath: payload.output_path,
   });
+  return true;
 }
 
-export function applyError(payload: { id: string; message: string }): void {
-  const current = imageStore.getState().current;
-  if (!current || current.id !== payload.id) return;
-  const status = payload.message === "cancelled" ? "cancelled" : "error";
+export function applyError(payload: {
+  id: string;
+  code?: string;
+  message: string;
+}): void {
+  if (
+    !resolveRunEvent(payload.id, {
+      terminal: true,
+      requireProcessing: false,
+    })
+  ) {
+    return;
+  }
+  const parsed =
+    typeof payload.code === "string" && payload.code.length > 0
+      ? { code: payload.code, message: payload.message }
+      : parseAppError(payload.message);
+  const code = parsed.code;
+  const message = parsed.message || payload.message;
+  if (code === ERROR_CODES.cancelled || message === "cancelled") {
+    imageStore.getState().patch({
+      status: "cancelled",
+      stage: null,
+      error: null,
+    });
+    return;
+  }
   imageStore.getState().patch({
-    status,
+    status: "error",
     stage: null,
-    error: status === "error" ? payload.message : null,
+    error: { code, message },
+  });
+}
+
+/** Apply GPU→CPU fallback notice for the active run (process stays non-error). */
+export function applyFallback(payload: InferenceFallbackPayload): void {
+  if (
+    !resolveRunEvent(payload.id, {
+      terminal: true,
+      requireProcessing: false,
+    })
+  ) {
+    return;
+  }
+
+  const copy = formatFallbackNotice(payload.from_ep, payload.to_ep);
+  uiStore.getState().showNotice({
+    severity: "warning",
+    title: copy.title,
+    body: copy.body,
+    code: "inference_fallback",
   });
 }
 
@@ -239,9 +428,10 @@ export async function initCurrentImageListeners(): Promise<() => void> {
 
   const unsubscribeDone = await listenInferenceDone(
     (payload: InferenceDonePayload) => {
-      applyDone(payload);
-      // Always record last successful job timings for Settings debug meta.
-      settingsStore.getState().setLastJobTimings(payload.timings);
+      // Only record timings when the UI actually accepted the done event.
+      if (applyDone(payload)) {
+        settingsStore.getState().setLastJobTimings(payload.timings);
+      }
     },
   );
 
@@ -251,19 +441,24 @@ export async function initCurrentImageListeners(): Promise<() => void> {
     },
   );
 
+  const unsubscribeFallback = await listenInferenceFallback(
+    (payload: InferenceFallbackPayload) => {
+      applyFallback(payload);
+    },
+  );
+
   return () => {
     unsubscribeProgress();
     unsubscribeDone();
     unsubscribeError();
+    unsubscribeFallback();
   };
 }
 
-/** Alias for App bootstrap; prefer initCurrentImageListeners. */
-export const initEventListeners = initCurrentImageListeners;
-
 export function prodStartProcessDeps(): StartProcessDeps {
   return {
-    exists: (p) => exists(p),
+    // Native command — not plugin-fs — so arbitrary user paths work on Windows.
+    exists: (p) => invokePathExists(p),
     ask: (msg) => ask(msg),
     removeBackground: invokeRemoveImageBackground,
     getSettings: () => {

@@ -22,6 +22,7 @@
   );
   --accent-fg: var(--floral-white);
   --danger: #b42318;
+  --warn: #8a6d3b;
   --radius: 8px;
   --rail-width: 300px;
   --titlebar-height: 40px;
@@ -55,7 +56,9 @@
     var(--spicy-paprika)
   );
   --_dark-accent-fg: var(--floral-white);
-  --_dark-danger: #f2a39a;
+  /* Saturated red on dark chrome — not the light salmon that read as pink. */
+  --_dark-danger: #ef4444;
+  --_dark-warn: #c9a86c;
   --_dark-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   --_dark-checkerboard-bg: color-mix(
     in srgb,
@@ -94,6 +97,7 @@
     --accent-hover: var(--_dark-accent-hover);
     --accent-fg: var(--_dark-accent-fg);
     --danger: var(--_dark-danger);
+    --warn: var(--_dark-warn);
     --shadow: var(--_dark-shadow);
     --checkerboard-bg: var(--_dark-checkerboard-bg);
     --checkerboard-tile: var(--_dark-checkerboard-tile);
@@ -114,6 +118,7 @@
   --accent-hover: var(--_dark-accent-hover);
   --accent-fg: var(--_dark-accent-fg);
   --danger: var(--_dark-danger);
+  --warn: var(--_dark-warn);
   --shadow: var(--_dark-shadow);
   --checkerboard-bg: var(--_dark-checkerboard-bg);
   --checkerboard-tile: var(--_dark-checkerboard-tile);
@@ -224,6 +229,49 @@ button:focus-visible {
   outline-offset: 1px;
 }
 
+/* ── Scrollbars ────────────────────────────────────────── */
+/*
+ * Thin, rounded thumbs that follow theme tokens so the rail and
+ * settings modal don't show the host OS chrome.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg-muted) 45%, transparent)
+    transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--fg-muted) 40%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--fg-muted) 65%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--accent) 70%, var(--fg-muted));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ── Shell ─────────────────────────────────────────────── */
 
 .app-shell {
@@ -240,6 +288,16 @@ button:focus-visible {
   background: var(--bg);
   color: var(--fg);
   overflow: hidden;
+}
+
+/* Notice sits under the titlebar in the preview column only — rail brand stays free.
+   Rail spans all three rows (contiguous rectangle). Empty grid cells avoided. */
+.app-shell.has-notice {
+  grid-template-rows: var(--titlebar-height) auto minmax(0, 1fr);
+  grid-template-areas:
+    "rail titlebar"
+    "rail notice"
+    "rail preview";
 }
 
 /* Custom window chrome (decorations: false). */
@@ -481,9 +539,12 @@ button.titlebar-close:hover:not(:disabled) {
 }
 
 .mode-option {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
   align-items: center;
-  gap: 8px;
   padding: 6px 10px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -538,18 +599,14 @@ button.titlebar-close:hover:not(:disabled) {
 }
 
 .mode-option-name {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
 }
 
 .mode-option-badge {
   font-size: 0.72rem;
   color: var(--fg-muted);
-  flex-shrink: 0;
-  max-width: 42%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   transition:
     color var(--duration-fast) var(--ease-out),
     opacity var(--duration-fast) var(--ease-out);
@@ -560,10 +617,26 @@ button.titlebar-close:hover:not(:disabled) {
   opacity: 1;
 }
 
+.mode-option-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+}
+
 .mode-option-model {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.68rem;
   opacity: 0.85;
+}
+
+.mode-option-badge.mode-option-nc {
+  color: var(--warn);
+  font-size: 0.68rem;
+  white-space: nowrap;
 }
 
 button.mode-option-download {
@@ -576,10 +649,9 @@ button.mode-option-download {
   font-size: 0.72rem;
   color: var(--accent);
   cursor: pointer;
-  max-width: 42%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
   transition:
     color var(--duration-fast) var(--ease-out),
     opacity var(--duration-fast) var(--ease-out),
@@ -601,6 +673,9 @@ button.mode-option-download:disabled {
 }
 
 .mode-option input {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
   width: auto;
   margin: 0;
   accent-color: var(--accent);
@@ -624,6 +699,105 @@ button.mode-option-download:disabled {
 
 .image-panel-status.is-error {
   color: var(--danger);
+}
+
+/* ── App notice (shared error/warning banner) ───────────── */
+/* Placed via app-shell.has-notice grid area "notice" (preview column only). */
+
+.app-notice {
+  grid-area: notice;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  min-width: 0;
+  box-sizing: border-box;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.app-notice.is-error {
+  background: color-mix(in srgb, var(--danger) 14%, var(--bg));
+  color: var(--fg);
+}
+
+.app-notice.is-warning {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  color: var(--fg);
+}
+
+.app-notice.is-info {
+  background: var(--bg-elevated, var(--bg));
+  color: var(--fg);
+}
+
+.app-notice-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-notice-title {
+  font-weight: 600;
+}
+
+.app-notice-text {
+  margin-top: 2px;
+  color: var(--fg-muted);
+  word-break: break-word;
+}
+
+.app-notice-dismiss {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+  font-size: 1rem;
+}
+
+.app-notice-dismiss:hover {
+  color: var(--fg);
+}
+
+/* Download error (mode selector local) */
+
+.mode-download-error {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 10%, var(--bg));
+  font-size: 0.82rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mode-download-error-title {
+  color: var(--danger);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.mode-download-error-body {
+  color: var(--fg-muted);
+  word-break: break-word;
+}
+
+.mode-download-error-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mode-download-error-actions button {
+  font-size: 0.82rem;
 }
 
 .image-panel-actions {
@@ -919,7 +1093,8 @@ body.is-slider-dragging * {
   padding: 24px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--duration-normal) var(--ease-out);
+  /* Snappy shell; keep in sync with useAnimatedPresence duration in App.tsx. */
+  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .modal-backdrop.is-open {
@@ -938,10 +1113,10 @@ body.is-slider-dragging * {
   box-shadow: var(--shadow);
   color: var(--fg);
   opacity: 0;
-  transform: translateY(10px) scale(0.97);
+  transform: translateY(8px) scale(0.98);
   transition:
-    opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
+    opacity var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
 }
 
 .modal-card.is-open {
@@ -957,20 +1132,248 @@ body.is-slider-dragging * {
   margin-bottom: 16px;
 }
 
-.modal-header h2 {
+.modal-header-start {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  transition: gap var(--duration-normal) var(--ease-out);
+}
+
+.modal-header-start.has-back {
+  gap: 8px;
+}
+
+.modal-title {
   margin: 0;
   font-size: 1.1rem;
+  min-width: 0;
 }
 
 .modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.25em 0.55em;
   line-height: 1;
+}
+
+/* In-flow Back: collapsed on Settings, expands next to title on About.
+   Fixed square + flex centering so the arrow is optically centered. */
+.modal-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 0;
+  height: 1.85em;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  border-color: transparent;
+  pointer-events: none;
+  line-height: 1;
+  font-size: 1em;
+  transform: translateX(-6px);
+  transition:
+    width var(--duration-normal) var(--ease-out),
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    border-color var(--duration-normal) var(--ease-out);
+}
+
+.modal-back.is-visible {
+  width: 1.85em;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  border-color: var(--border);
+}
+
+/*
+ * Settings ↔ About crossfade with push navigation.
+ * Inactive view is taken out of flow (position:absolute) so shell height
+ * tracks the active panel only — avoids permanent empty space under Settings.
+ * Height can change on navigate; that tradeoff is intentional vs max(both).
+ */
+.modal-view-stack {
+  position: relative;
+  display: grid;
+  align-items: start;
+}
+
+.modal-view {
+  grid-area: 1 / 1;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s linear var(--duration-normal);
+}
+
+.modal-view:not(.is-active) {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+}
+
+.modal-view--settings:not(.is-active) {
+  transform: translateX(-12px);
+}
+
+.modal-view--about:not(.is-active) {
+  transform: translateX(12px);
+}
+
+.modal-view.is-active {
+  position: relative;
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+  visibility: visible;
+  z-index: 1;
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s linear 0s;
+}
+
+/* System-browser “links” are buttons so the webview never navigates. */
+.link-button {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--accent, var(--fg-muted));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--fg);
 }
 
 .settings-panel {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.settings-footer {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-about-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--accent, var(--fg-muted));
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-about-link:hover {
+  color: var(--fg);
+}
+
+.about-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 0.9rem;
+}
+
+.about-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.about-app-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.about-versions {
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.about-mit {
+  margin: 0;
+  color: var(--fg);
+  line-height: 1.45;
+}
+
+.about-mit .link-button,
+.about-models-table .link-button,
+.about-links .link-button,
+.nc-license-modal-license .link-button {
+  color: var(--accent, var(--fg-muted));
+}
+
+.about-mit .link-button:hover,
+.about-models-table .link-button:hover,
+.about-links .link-button:hover,
+.nc-license-modal-license .link-button:hover {
+  color: var(--fg);
+}
+
+.about-models-heading {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+
+.about-models-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.about-models-table th,
+.about-models-table td {
+  text-align: left;
+  padding: 4px 8px 4px 0;
+  vertical-align: top;
+}
+
+.about-models-table th {
+  font-weight: 500;
+  color: var(--fg-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.about-models-table code {
+  font-size: 0.8em;
+}
+
+.about-nc-footnote {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  line-height: 1.4;
+}
+
+.about-links {
+  font-size: 0.85rem;
 }
 
 .settings-field {
@@ -999,6 +1402,11 @@ body.is-slider-dragging * {
 .settings-hint {
   font-size: 0.8rem;
   color: var(--fg-muted);
+}
+
+/* Secondary action under the primary update check button. */
+.settings-update-secondary {
+  margin-top: 0.25rem;
 }
 
 .settings-meta {
@@ -1083,11 +1491,87 @@ body.is-slider-dragging * {
   width: 100%;
 }
 
+.nc-license-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 260;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+
+.nc-license-modal-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nc-license-modal-card {
+  width: min(420px, 100%);
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  color: var(--fg);
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
+}
+
+.nc-license-modal-card.is-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.nc-license-modal-card h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+.nc-license-modal-summary,
+.nc-license-modal-hint {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.nc-license-modal-license {
+  margin: 0 0 16px;
+  font-size: 0.85rem;
+}
+
+.nc-license-modal-license .link-button {
+  color: var(--warn);
+}
+
+.nc-license-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.nc-license-modal-actions button {
+  flex: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .modal-backdrop,
   .modal-card,
+  .modal-view,
+  .modal-back,
+  .modal-header-start,
+  .modal-title,
   .download-modal-backdrop,
   .download-modal-card,
+  .nc-license-modal-backdrop,
+  .nc-license-modal-card,
   .mode-option,
   .mode-option-badge,
   button.mode-option-download {
@@ -1095,10 +1579,16 @@ body.is-slider-dragging * {
     transition: none;
   }
 
-  .modal-backdrop,
-  .modal-card,
-  .download-modal-backdrop,
-  .download-modal-card {
+  /* Only force full opacity when open — closed nodes must stay hidden or the
+     download modal can remain visible after success (stuck on "Verifying"). */
+  .modal-backdrop.is-open,
+  .modal-card.is-open,
+  .modal-view.is-active,
+  .modal-back.is-visible,
+  .download-modal-backdrop.is-open,
+  .download-modal-card.is-open,
+  .nc-license-modal-backdrop.is-open,
+  .nc-license-modal-card.is-open {
     opacity: 1;
     transform: none;
   }

@@ -29,6 +29,10 @@ type AnimatedPresence = {
 /**
  * Mount immediately on show; delay unmount until exit transitions finish.
  * Sets `open` on the next frame so enter keyframes/transitions can run.
+ *
+ * Exit always schedules an unmount timer when `visible` is false — do not gate
+ * that timer on impure setState updater side effects (React may defer updaters,
+ * which left the download modal stuck on "Verifying" after success).
  */
 export function useAnimatedPresence(
   visible: boolean,
@@ -55,13 +59,10 @@ export function useAnimatedPresence(
       };
     }
 
-    let scheduleUnmount = false;
-    setState((prev) => {
-      if (!prev.rendered) return prev;
-      scheduleUnmount = true;
-      return { rendered: true, open: false };
-    });
-    if (!scheduleUnmount) return;
+    // Begin exit: drop `open` so CSS can fade out, then unmount after duration.
+    setState((prev) =>
+      prev.rendered || prev.open ? { rendered: true, open: false } : prev,
+    );
 
     const timer = window.setTimeout(() => {
       setState({ rendered: false, open: false });
