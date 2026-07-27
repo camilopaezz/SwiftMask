@@ -3,6 +3,37 @@ import { getMockState } from "./mockState";
 /** In-flight inference promise — cancel waits on this (mirrors wait_until_idle). */
 let activeInference: Promise<void> | null = null;
 
+/**
+ * E2E runs in a browser with mocked IPC, not a Tauri webview.
+ * Keep false so updater short-circuits without calling plugin:updater|check.
+ */
+export function isTauri(): boolean {
+  return false;
+}
+
+/** Minimal Resource stub for @tauri-apps/plugin-updater (Update extends Resource). */
+export class Resource {
+  readonly rid: number;
+
+  constructor(rid: number) {
+    this.rid = rid;
+  }
+
+  async close(): Promise<void> {}
+}
+
+/** Minimal Channel stub so plugin-updater can load under the core alias. */
+export class Channel<T = unknown> {
+  id = 0;
+  onmessage: (response: T) => void = () => {};
+
+  constructor(onmessage?: (response: T) => void) {
+    if (onmessage) {
+      this.onmessage = onmessage;
+    }
+  }
+}
+
 export function invoke<T>(
   cmd: string,
   args?: Record<string, unknown>,
