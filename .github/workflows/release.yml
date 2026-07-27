@@ -5,8 +5,13 @@ name: Release
 #   git tag v0.2.0 && git push origin v0.2.0
 #
 # Artifacts:
-#   Linux  — AppImage, .deb, .rpm
-#   Windows — NSIS setup.exe, .msi
+#   Linux  — AppImage, .deb, .rpm (+ AppImage.sig for updater)
+#   Windows — NSIS setup.exe, .msi (+ setup.exe.sig for updater)
+#   latest.json — static signed-updater manifest (stable channel via /releases/latest)
+#
+# Required secrets (Ed25519 updater signing; not Authenticode):
+#   TAURI_SIGNING_PRIVATE_KEY
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD (optional if key has no password)
 
 on:
   push:
@@ -143,7 +148,20 @@ jobs:
         working-directory: ./src-tauri
         run: cargo test --locked
 
+      - name: require updater signing secrets
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "TAURI_SIGNING_PRIVATE_KEY secret is required to build signed updater artifacts."
+            exit 1
+          fi
+
       - name: build Tauri release bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bunx tauri build ${{ matrix.tauri_args }}
 
       - name: stage release assets (Linux)
@@ -157,6 +175,7 @@ jobs:
           appimages=(src-tauri/target/release/bundle/appimage/*.AppImage)
           debs=(src-tauri/target/release/bundle/deb/*.deb)
           rpms=(src-tauri/target/release/bundle/rpm/*.rpm)
+          appimage_sigs=(src-tauri/target/release/bundle/appimage/*.AppImage.sig)
 
           if [ ${#appimages[@]} -eq 0 ] || [ ${#debs[@]} -eq 0 ] || [ ${#rpms[@]} -eq 0 ]; then
             echo "Missing Linux bundle(s):"
@@ -166,8 +185,14 @@ jobs:
             ls -laR src-tauri/target/release/bundle || true
             exit 1
           fi
+          if [ ${#appimage_sigs[@]} -eq 0 ]; then
+            echo "Missing AppImage updater signature (.AppImage.sig)."
+            ls -laR src-tauri/target/release/bundle/appimage || true
+            exit 1
+          fi
 
           cp "${appimages[0]}" release-assets/swiftmask-linux.AppImage
+          cp "${appimage_sigs[0]}" release-assets/swiftmask-linux.AppImage.sig
           cp "${debs[0]}" release-assets/swiftmask-linux.deb
           cp "${rpms[0]}" release-assets/swiftmask-linux.rpm
           ls -la release-assets
@@ -182,6 +207,8 @@ jobs:
 
           nsis=(src-tauri/target/release/bundle/nsis/*.exe)
           msis=(src-tauri/target/release/bundle/msi/*.msi)
+          nsis_sigs=(src-tauri/target/release/bundle/nsis/*.exe.sig)
+          msi_sigs=(src-tauri/target/release/bundle/msi/*.msi.sig)
 
           if [ ${#nsis[@]} -eq 0 ] || [ ${#msis[@]} -eq 0 ]; then
             echo "Missing Windows bundle(s):"
@@ -190,9 +217,18 @@ jobs:
             ls -laR src-tauri/target/release/bundle || true
             exit 1
           fi
+          if [ ${#nsis_sigs[@]} -eq 0 ]; then
+            echo "Missing NSIS updater signature (.exe.sig)."
+            ls -laR src-tauri/target/release/bundle/nsis || true
+            exit 1
+          fi
 
           cp "${nsis[0]}" release-assets/swiftmask-windows-setup.exe
+          cp "${nsis_sigs[0]}" release-assets/swiftmask-windows-setup.exe.sig
           cp "${msis[0]}" release-assets/swiftmask-windows.msi
+          if [ ${#msi_sigs[@]} -gt 0 ]; then
+            cp "${msi_sigs[0]}" release-assets/swiftmask-windows.msi.sig
+          fi
           ls -la release-assets
 
       - name: upload release assets
@@ -254,6 +290,45 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
+      - name: generate latest.json updater manifest
+        env:
+          VERSION: ${{ needs.verify-version.outputs.version }}
+          NOTES: ${{ steps.notes.outputs.body }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test -f dist/swiftmask-linux.AppImage.sig
+          test -f dist/swiftmask-windows-setup.exe.sig
+
+          TAG="v${VERSION}"
+          BASE="https://github.com/${REPO}/releases/download/${TAG}"
+          PUB_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          LINUX_SIG="$(tr -d '\r\n' < dist/swiftmask-linux.AppImage.sig)"
+          WIN_SIG="$(tr -d '\r\n' < dist/swiftmask-windows-setup.exe.sig)"
+
+          # notes as a single-line JSON string via jq; platforms use NSIS (not MSI)
+          # for windows-x86_64 because the static manifest is one URL per os-arch.
+          jq -n \
+            --arg version "${VERSION}" \
+            --arg notes "${NOTES}" \
+            --arg pub_date "${PUB_DATE}" \
+            --arg linux_url "${BASE}/swiftmask-linux.AppImage" \
+            --arg linux_sig "${LINUX_SIG}" \
+            --arg win_url "${BASE}/swiftmask-windows-setup.exe" \
+            --arg win_sig "${WIN_SIG}" \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "linux-x86_64": { url: $linux_url, signature: $linux_sig },
+                "windows-x86_64": { url: $win_url, signature: $win_sig }
+              }
+            }' > dist/latest.json
+
+          echo "Generated latest.json:"
+          cat dist/latest.json
+
       - name: create GitHub release
         uses: softprops/action-gh-release@v3
         with:
@@ -265,7 +340,10 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist/swiftmask-linux.AppImage
+            dist/swiftmask-linux.AppImage.sig
             dist/swiftmask-linux.deb
             dist/swiftmask-linux.rpm
             dist/swiftmask-windows-setup.exe
+            dist/swiftmask-windows-setup.exe.sig
             dist/swiftmask-windows.msi
+            dist/latest.json

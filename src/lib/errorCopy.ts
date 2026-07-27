@@ -149,3 +149,36 @@ export function formatRevealFailedNotice(): ErrorCopy {
     body: "Check that the output path still exists.",
   };
 }
+
+/** Signed updater: a newer stable build is available (startup / Settings). */
+export function formatUpdateAvailableNotice(version: string): ErrorCopy {
+  return {
+    title: `Update ${version} available`,
+    body: "Open Settings to install and restart.",
+  };
+}
+
+/** Signed updater: check found no newer release. */
+export function formatUpToDateCopy(): ErrorCopy {
+  return {
+    title: "You're up to date",
+    body: "No newer stable release was found.",
+  };
+}
+
+/** Signed updater: manual check failed (surface to user). */
+export function formatUpdateCheckFailedCopy(detail?: string): ErrorCopy {
+  return {
+    title: "Couldn't check for updates",
+    body: detail || "Check your connection and try again.",
+  };
+}
+
+/** Signed updater: download/install failed. */
+export function formatUpdateInstallFailedCopy(detail?: string): ErrorCopy {
+  return {
+    title: "Couldn't install the update",
+    body:
+      detail || "Try again, or download the installer from GitHub Releases.",
+  };
+}

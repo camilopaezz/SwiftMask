@@ -56,6 +56,14 @@ sudo rpm -i swiftmask-linux.rpm
 
 On first run the app **benchmarks** available execution providers (CPU, CUDA on Linux NVIDIA, DirectML on Windows) and picks the fastest for your hardware. You can override this anytime in **Settings**.
 
+### Updates
+
+Stable builds can **check GitHub Releases for signed updates** (Settings → Check for updates; also a quiet check after launch). There is no telemetry — only a single HTTPS request for the release manifest when checking.
+
+- In-app update packages: **AppImage** (Linux) and **NSIS** (Windows).
+- **`.deb` / `.rpm` / MSI** remain on Releases for first install / package managers. In-app update from those installs may pull AppImage/NSIS instead — prefer AppImage or NSIS if you want the built-in updater path.
+- Prereleases do not move GitHub “latest”; auto-update stays quiet until a **non-prerelease** tag is published.
+
 ## Features
 
 - **Local inference** — images never leave your machine
@@ -63,6 +71,7 @@ On first run the app **benchmarks** available execution providers (CPU, CUDA on 
 - **GPU acceleration** — CUDA on Linux (NVIDIA), DirectML on Windows; CPU fallback everywhere
 - **Drag and drop** — open images from the file picker or drop them on the preview pane
 - **Before/after slider** — scrub between input and output after processing
+- **Signed auto-updates** — optional check against GitHub Releases (no telemetry)
 
 Supported input formats: **PNG, JPG, WEBP, BMP**.
 

@@ -17,9 +17,10 @@ import {
 import {
   formatFirstRunGpuDegradeNotice,
   formatModelsUnavailableNotice,
+  formatUpdateAvailableNotice,
 } from "./lib/errorCopy";
 import { FALLBACK_DEFAULT_MODE, PREFERRED_DEFAULT_MODE } from "./lib/models";
-import { showAppErrorNotice } from "./lib/showAppErrorNotice";
+import { showAppErrorNotice, showAppNotice } from "./lib/showAppErrorNotice";
 import {
   invokeDetectGpu,
   invokeGetConfig,
@@ -27,6 +28,7 @@ import {
   invokeRunBenchmark,
 } from "./lib/tauri";
 import { applyTheme, persistTheme } from "./lib/theme";
+import { checkForUpdate, STARTUP_UPDATE_CHECK_DELAY_MS } from "./lib/updater";
 import { useAnimatedPresence } from "./lib/useAnimatedPresence";
 import { useKeyboardShortcuts } from "./lib/useKeyboardShortcuts";
 import { useTauriFileDrop } from "./lib/useTauriFileDrop";
@@ -169,6 +171,49 @@ function App() {
     }
     persistTheme(theme);
   }, [theme]);
+
+  // Silent signed-updater check after cold start (stable channel only).
+  // Failures stay in the console — no error banner on startup.
+  useEffect(() => {
+    if (!ready) return;
+
+    let cancelled = false;
+    let heldUpdate: { close: () => Promise<void> } | null = null;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const result = await checkForUpdate();
+          if (cancelled) {
+            if (result.status === "available") {
+              await result.update.close().catch(() => undefined);
+            }
+            return;
+          }
+          if (result.status !== "available") return;
+          heldUpdate = result.update;
+          showAppNotice(
+            formatUpdateAvailableNotice(result.info.version),
+            "info",
+            "update_available",
+          );
+          // Notice is dismiss-only; Settings owns install. Close the resource
+          // so a later Settings check opens a fresh one.
+          await result.update.close().catch(() => undefined);
+          heldUpdate = null;
+        } catch (err) {
+          if (!cancelled) {
+            console.error("startup update check failed", err);
+          }
+        }
+      })();
+    }, STARTUP_UPDATE_CHECK_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      void heldUpdate?.close().catch(() => undefined);
+    };
+  }, [ready]);
 
   const settingsWasOpenRef = useRef(settingsPresence.open);
   const prevSettingsViewRef = useRef(settingsView);

@@ -1404,6 +1404,11 @@ body.is-slider-dragging * {
   color: var(--fg-muted);
 }
 
+/* Secondary action under the primary update check button. */
+.settings-update-secondary {
+  margin-top: 0.25rem;
+}
+
 .settings-meta {
   font-size: 0.85rem;
   color: var(--fg-muted);

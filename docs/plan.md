@@ -25,7 +25,7 @@ This file is **why**, not a tour of the tree. Implementation lives in the code; 
 | A13 | Testing | **Rust unit + inference smoke + Vitest + mocked Playwright** | Real Tauri WebDriver still open (see below). |
 | A14 | Name & license | **`SwiftMask` + MIT** | Compatible with model licenses used. |
 | A15 | Image pipeline | **`image` + `imageproc`** | Enough for mask I/O and light feathering. |
-| A16 | Updates & telemetry | **Signed Tauri updater (planned) + zero telemetry** | Local-first; logs local only when added. |
+| A16 | Updates & telemetry | **Signed Tauri updater + zero telemetry** | Static `latest.json` on GitHub Releases; Ed25519 package sigs; no analytics. |
 | A17 | Bundled benchmark model | **Embed `u2netp` via `include_bytes!`** | Offline first-run benchmark + offline Turbo. |
 | A18 | Output filename | **`<stem>-nobg-<modelId>.png` + overwrite prompt** | Predictable; keeps inputs untouched. |
 | A19 | Theme | **Follow system via `prefers-color-scheme`** | Minimal MVP cost. |
@@ -64,7 +64,7 @@ Not re-documented elsewhere as a living backlog:
 
 | Item | Notes |
 |------|--------|
-| Signed auto-updater | A16 — `tauri-plugin-updater` + key pair in CI secrets |
+| Beta update channel | A16 stable-only today (`/releases/latest`); second endpoint + Settings preference later |
 | Real desktop E2E | `e2e/tauri-webdriver.config.ts` is a stub; mocked Playwright only proves UI wiring |
 | Local diagnostics | Rotating local log + “copy diagnostics” (no network) |
 | Large-image guard | Fail clearly or warn before OOM/slow runs on huge inputs |

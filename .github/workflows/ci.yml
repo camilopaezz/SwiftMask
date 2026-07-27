@@ -3,6 +3,11 @@ name: CI
 # Full CI gate for production: runs on PRs targeting main only.
 # Feature → dev PRs intentionally skip CI; validate locally before merging to dev.
 # Release builds and publishing happen in release.yml (tag push after dev → main).
+#
+# Updater signing secrets (same as release.yml) are required so PR builds prove
+# createUpdaterArtifacts + Ed25519 signing works:
+#   TAURI_SIGNING_PRIVATE_KEY
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD (optional)
 
 on:
   pull_request:
@@ -45,18 +50,21 @@ jobs:
           - platform: ubuntu-24.04
             tauri_args: --bundles appimage,deb,rpm
             artifact_name: swiftmask-linux
-            # AppImage + .deb + .rpm (one build, multiple formats)
+            # AppImage + .deb + .rpm + updater signatures
             artifact_path: |
               src-tauri/target/release/bundle/appimage/*.AppImage
+              src-tauri/target/release/bundle/appimage/*.AppImage.sig
               src-tauri/target/release/bundle/deb/*.deb
               src-tauri/target/release/bundle/rpm/*.rpm
           - platform: windows-latest
             tauri_args: --bundles nsis,msi
             artifact_name: swiftmask-windows
-            # NSIS setup.exe + WiX .msi
+            # NSIS setup.exe + WiX .msi + updater signatures
             artifact_path: |
               src-tauri/target/release/bundle/nsis/*.exe
+              src-tauri/target/release/bundle/nsis/*.exe.sig
               src-tauri/target/release/bundle/msi/*.msi
+              src-tauri/target/release/bundle/msi/*.msi.sig
 
     runs-on: ${{ matrix.platform }}
 
@@ -111,8 +119,21 @@ jobs:
         working-directory: ./src-tauri
         run: cargo test --locked
 
+      - name: require updater signing secrets
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "TAURI_SIGNING_PRIVATE_KEY secret is required (createUpdaterArtifacts is on)."
+            exit 1
+          fi
+
       - name: build Tauri release bundle
         # beforeBuildCommand re-runs the frontend build; that is intentional.
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bunx tauri build ${{ matrix.tauri_args }}
 
       - name: upload installers

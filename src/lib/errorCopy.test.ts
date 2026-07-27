@@ -64,4 +64,18 @@ describe("inventory copy helpers", () => {
     expect(formatDownloadCancelUnconfirmedNotice().title).toMatch(/cancel/i);
     expect(formatRevealFailedNotice().title).toMatch(/folder/i);
   });
+
+  it("covers signed updater copy helpers", async () => {
+    const {
+      formatUpdateAvailableNotice,
+      formatUpToDateCopy,
+      formatUpdateCheckFailedCopy,
+      formatUpdateInstallFailedCopy,
+    } = await import("./errorCopy");
+    expect(formatUpdateAvailableNotice("1.2.3").title).toMatch(/1\.2\.3/);
+    expect(formatUpdateAvailableNotice("1.2.3").body).toMatch(/Settings/i);
+    expect(formatUpToDateCopy().title).toMatch(/up to date/i);
+    expect(formatUpdateCheckFailedCopy().title).toMatch(/check/i);
+    expect(formatUpdateInstallFailedCopy("sig boom").body).toMatch(/sig boom/);
+  });
 });

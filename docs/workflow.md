@@ -44,11 +44,82 @@ Repeat until `dev` has enough for a release.
    git tag v0.2.0
    git push origin v0.2.0
    ```
-5. **Release workflow** (`.github/workflows/release.yml`) builds installers and publishes a [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github) with assets:
-   - Linux: AppImage, `.deb`, `.rpm`
-   - Windows: NSIS setup `.exe`, `.msi`
+5. **Release workflow** (`.github/workflows/release.yml`) builds **signed** installers and publishes a [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github) with assets:
+   - Linux: AppImage, `.deb`, `.rpm`, AppImage `.sig`
+   - Windows: NSIS setup `.exe`, `.msi`, NSIS `.sig` (MSI `.sig` may also be present)
+   - `latest.json` — static manifest for the in-app updater
 
 To re-run a failed publish without retagging, use **Actions → Release → Run workflow** with the existing tag.
+
+## Signed auto-updater
+
+In-app updates use [`tauri-plugin-updater`](https://v2.tauri.app/plugin/updater/) against a static endpoint:
+
+`https://github.com/camilopaezz/SwiftMask/releases/latest/download/latest.json`
+
+| Topic | Detail |
+|-------|--------|
+| Channel | **Stable only.** GitHub `/releases/latest` ignores prereleases (`0.9.0-beta.*` etc.). Until the first **non-prerelease** tag after this lands, `check()` finds nothing — expected; betas still ship installers for manual download. |
+| Update packages | `linux-x86_64` → AppImage; `windows-x86_64` → **NSIS** setup.exe. MSI / deb / rpm stay on the release for first install / package managers but are **not** listed in `latest.json`. |
+| UX | Silent check a few seconds after launch (log-only on failure) + **Settings → Check for updates**. User confirms before download/install; then install + relaunch. No telemetry. |
+| Signing | Ed25519 updater package signatures (not Authenticode/SmartScreen). Public key is in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`. |
+
+### One-time key setup (operator)
+
+```bash
+# Generate once; never commit the private key
+bunx tauri signer generate -w ~/.tauri/swiftmask.key --ci
+# Optional password: omit --ci and enter one, or pass -p '…'
+```
+
+1. Put the **public** key contents into `tauri.conf.json` → `plugins.updater.pubkey` (already set for this project).
+2. Add GitHub Actions secrets on the repo:
+   - `TAURI_SIGNING_PRIVATE_KEY` — full private key file contents
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — only if the key was generated with a password
+3. Both **`ci.yml`** (PR → `main`) and **`release.yml`** require these secrets so builds always prove signing works.
+
+Losing the private key breaks continuous signed updates for existing installs — treat it like a production signing key.
+
+Forks and external PRs that cannot read repo secrets will fail the signed Tauri build step on PR → `main`; maintainers re-run CI after secrets are available, or review without relying on fork CI green.
+
+### Local builds (contributors)
+
+`bundle.createUpdaterArtifacts` is **on** in `tauri.conf.json`, so a full `tauri build` needs the same signing env vars as CI:
+
+```bash
+export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/swiftmask.key)"
+# only if the key has a password:
+# export TAURI_SIGNING_PRIVATE_KEY_PASSWORD='…'
+
+bunx tauri build --bundles appimage   # Linux example
+# bunx tauri build --bundles nsis     # Windows
+```
+
+- **Dev / day-to-day UI work:** `bun run tauri dev` does **not** need the private key.
+- **Unsigned local smoke of an installer:** not supported while `createUpdaterArtifacts` is true — either export the key above, or temporarily set `"createUpdaterArtifacts": false` in a private branch (never commit that for release).
+- **Production key:** do not hand the real private key to random contributors; maintainers build signed artifacts in CI/release.
+
+### `latest.json` shape (generated in `release.yml`)
+
+```json
+{
+  "version": "<semver without v>",
+  "notes": "<changelog excerpt>",
+  "pub_date": "<RFC3339>",
+  "platforms": {
+    "linux-x86_64": {
+      "url": "https://github.com/…/releases/download/vVERSION/swiftmask-linux.AppImage",
+      "signature": "<contents of .AppImage.sig>"
+    },
+    "windows-x86_64": {
+      "url": "https://github.com/…/releases/download/vVERSION/swiftmask-windows-setup.exe",
+      "signature": "<contents of .exe.sig>"
+    }
+  }
+}
+```
+
+Prerelease tags still attach `latest.json` (useful later for a beta endpoint); clients currently only hit `/releases/latest`.
 
 ## CI summary
 
@@ -56,9 +127,9 @@ To re-run a failed publish without retagging, use **Actions → Release → Run 
 |-------|----------|-----------|
 | PR → `dev` | — | Nothing (manual QA) |
 | Push to `dev` | — | Nothing |
-| PR → `main` | `ci.yml` | Lint, unit tests, `gen:models:check`, `cargo test`, Tauri build (Linux + Windows), mocked Playwright E2E |
+| PR → `main` | `ci.yml` | Lint, unit tests, `gen:models:check`, `cargo test`, signed Tauri build (Linux + Windows), mocked Playwright E2E |
 | Push to `main` | — | Nothing (CI already ran on the PR) |
-| Push semver tag `vX.Y.Z` (optional `-prerelease`) on `main` | `release.yml` | Version check, full test + build, GitHub Release upload |
+| Push semver tag `vX.Y.Z` (optional `-prerelease`) on `main` | `release.yml` | Version check, signed build, `latest.json`, GitHub Release upload |
 | Manual dispatch with existing tag | `release.yml` | Re-publish a failed release without retagging |
 
 ## First-time setup
