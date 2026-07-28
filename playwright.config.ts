@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "list",
   use: {
-    baseURL: "http://localhost:1420",
+    baseURL: "http://localhost:5173",
     headless: true,
     trace: "on-first-retry",
   },
@@ -20,10 +20,10 @@ export default defineConfig({
   ],
   webServer: {
     // Must use VITE_E2E=1 so Tauri APIs resolve to e2e/mocks. Never reuse a
-    // normal `bun run dev` server on :1420 — mocks would be missing and the UI
+    // normal `bun run dev` server on :5173 — mocks would be missing and the UI
     // crashes before "Drop an image here" appears.
     command: "VITE_E2E=1 bun run dev",
-    url: "http://localhost:1420",
+    url: "http://localhost:5173",
     reuseExistingServer: process.env.REUSE_E2E_SERVER === "1",
     timeout: 120_000,
   },
