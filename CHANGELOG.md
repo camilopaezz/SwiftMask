@@ -8,6 +8,7 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ### Added
 
+- **High** quality mode (`birefnet-general-lite`, MIT) — mid/high tier between Balanced+ and Max Quality
 - About & licenses panel in Settings: app/ORT versions, MIT notice, model license table, GitHub links; external links open in the system browser (including the NC license modal)
 - Release and CI publish extra installers: Linux `.deb` / `.rpm` and Windows `.msi` (alongside AppImage + NSIS)
 

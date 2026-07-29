@@ -34,7 +34,7 @@ pub fn postprocess(
     output: &ndarray::ArrayD<f32>,
 ) -> Result<GrayImage, AppError> {
     match model_id {
-        "u2netp" | "isnet-general-use" | "rmbg-1.4" | "rmbg-2.0" => {
+        "u2netp" | "isnet-general-use" | "rmbg-1.4" | "birefnet-general-lite" | "rmbg-2.0" => {
             postprocess_minmax(original_size, output)
         }
         _ => Err(AppError::Pipeline(format!(
@@ -194,6 +194,27 @@ mod tests {
         }
         let output = ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 16, 16]), data).unwrap();
         let mask = postprocess("isnet-general-use", (16, 16), &output).unwrap();
+        assert_eq!(mask.dimensions(), (16, 16));
+        let min_pixel = mask.pixels().map(|p| p[0]).min().unwrap();
+        let max_pixel = mask.pixels().map(|p| p[0]).max().unwrap();
+        assert!(min_pixel < 10);
+        assert!(max_pixel > 245);
+        let edge = mask.get_pixel(8, 8)[0];
+        assert!(edge > 10 && edge < 245);
+    }
+
+    #[test]
+    fn postprocess_birefnet_general_lite_uses_minmax() {
+        // High (birefnet-general-lite) shares the min-max + feather path for now.
+        let mut data = Vec::with_capacity(16 * 16);
+        for _y in 0..16 {
+            for x in 0..16 {
+                let v = if x < 8 { 6.0f32 } else { -6.0f32 };
+                data.push(v);
+            }
+        }
+        let output = ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 16, 16]), data).unwrap();
+        let mask = postprocess("birefnet-general-lite", (16, 16), &output).unwrap();
         assert_eq!(mask.dimensions(), (16, 16));
         let min_pixel = mask.pixels().map(|p| p[0]).min().unwrap();
         let max_pixel = mask.pixels().map(|p| p[0]).max().unwrap();

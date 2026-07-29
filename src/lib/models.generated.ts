@@ -3,7 +3,7 @@
 // Source of truth: src-tauri/src/models.rs
 // Regenerate: bun run gen:models
 
-export type ModelMode = "u2netp" | "isnet-general-use" | "rmbg-1.4" | "rmbg-2.0";
+export type ModelMode = "u2netp" | "isnet-general-use" | "rmbg-1.4" | "birefnet-general-lite" | "rmbg-2.0";
 
 export type ModelStaticMeta = {
   id: ModelMode;
@@ -61,6 +61,20 @@ export const MODEL_REGISTRY: readonly ModelStaticMeta[] = [
     source: "briaai/RMBG-1.4",
     download_url: "https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model.onnx",
     sha256: "8cafcf770b06757c4eaced21b1a88e57fd2b66de01b8045f35f01535ba742e0f",
+    bundled: false,
+  },
+  {
+    id: "birefnet-general-lite",
+    name: "High",
+    file: "birefnet-general-lite.onnx",
+    size_bytes: 224005088,
+    input_size: 1024,
+    mean: [0.485, 0.456, 0.406],
+    std: [0.229, 0.224, 0.225],
+    license: "MIT",
+    source: "ZhengPeng7/BiRefNet via rembg",
+    download_url: "https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+    sha256: "5600024376f572a557870a5eb0afb1e5961636bef4e1e22132025467d0f03333",
     bundled: false,
   },
   {

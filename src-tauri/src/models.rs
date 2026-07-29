@@ -18,9 +18,11 @@ fn is_cancelled(err: &AppError) -> bool {
 
 // ======================================================================
 // Checksum sources:
-//   isnet-general-use : MD5 fc16ebd8b0c10d971d3513d564d01e29 (rembg), SHA-256 computed locally
-//   rmbg-1.4          : SHA-256 from HuggingFace
-//   rmbg-2.0          : SHA-256 from rembg source (bria_rmbg.py)
+//   isnet-general-use      : MD5 fc16ebd8b0c10d971d3513d564d01e29 (rembg), SHA-256 computed locally
+//   rmbg-1.4               : SHA-256 from HuggingFace
+//   birefnet-general-lite  : rembg release BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx
+//                            (MD5 4fab47adc4ff364be1713e97b7e66334), SHA-256 computed locally
+//   rmbg-2.0               : SHA-256 from rembg source (bria_rmbg.py)
 // ======================================================================
 
 pub const PLACEHOLDER_SHA256: &str =
@@ -34,6 +36,12 @@ pub const ISNET_GENERAL_USE_SHA256: &str =
 
 pub const RMBG_1_4_SHA256: &str =
     "8cafcf770b06757c4eaced21b1a88e57fd2b66de01b8045f35f01535ba742e0f";
+
+/// rembg release:
+/// https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx
+/// MD5 cross-check (rembg): 4fab47adc4ff364be1713e97b7e66334
+pub const BIREFNET_GENERAL_LITE_SHA256: &str =
+    "5600024376f572a557870a5eb0afb1e5961636bef4e1e22132025467d0f03333";
 
 pub const RMBG_2_0_SHA256: &str =
     "5b486f08200f513f460da46dd701db5fbb47d79b4be4b708a19444bcd4e79958";
@@ -115,6 +123,20 @@ fn registry() -> &'static [ModelEntry] {
                 source: "briaai/RMBG-1.4".into(),
                 download_url: "https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model.onnx".into(),
                 sha256: RMBG_1_4_SHA256.into(),
+                bundled: false,
+            },
+            ModelEntry {
+                id: "birefnet-general-lite".into(),
+                name: "High".into(),
+                file: "birefnet-general-lite.onnx".into(),
+                size_bytes: 224_005_088,
+                input_size: 1024,
+                mean: vec![0.485, 0.456, 0.406],
+                std: vec![0.229, 0.224, 0.225],
+                license: "MIT".into(),
+                source: "ZhengPeng7/BiRefNet via rembg".into(),
+                download_url: "https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx".into(),
+                sha256: BIREFNET_GENERAL_LITE_SHA256.into(),
                 bundled: false,
             },
             ModelEntry {
@@ -645,9 +667,21 @@ mod tests {
     }
 
     #[test]
-    fn registry_has_four_models() {
-        assert_eq!(registry().len(), 4);
+    fn registry_has_five_models() {
+        assert_eq!(registry().len(), 5);
         assert!(registry().iter().any(|m| m.id == "u2netp"));
+        assert!(registry().iter().any(|m| m.id == "birefnet-general-lite"));
+        let ids: Vec<&str> = registry().iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec![
+                "u2netp",
+                "isnet-general-use",
+                "rmbg-1.4",
+                "birefnet-general-lite",
+                "rmbg-2.0",
+            ]
+        );
     }
 
     #[test]
@@ -692,6 +726,20 @@ mod tests {
         assert_eq!(m.mean, vec![0.5, 0.5, 0.5]);
         assert_eq!(m.std, vec![1.0, 1.0, 1.0]);
         assert!(!is_placeholder_checksum(&m.sha256));
+    }
+
+    #[test]
+    fn birefnet_general_lite_metadata() {
+        let m = find_model("birefnet-general-lite").unwrap();
+        assert_eq!(m.name, "High");
+        assert_eq!(m.input_size, 1024);
+        assert_eq!(m.mean, vec![0.485, 0.456, 0.406]);
+        assert_eq!(m.std, vec![0.229, 0.224, 0.225]);
+        assert_eq!(m.license, "MIT");
+        assert_eq!(m.size_bytes, 224_005_088);
+        assert!(!m.bundled);
+        assert!(!is_placeholder_checksum(&m.sha256));
+        assert_eq!(m.sha256, BIREFNET_GENERAL_LITE_SHA256);
     }
 
     #[test]

@@ -13,7 +13,7 @@ This file is **why**, not a tour of the tree. Implementation lives in the code; 
 | A1 | Desktop shell | **Tauri 2 + Rust** | Small binary, native EP access via `ort`, multi-platform, low RAM. |
 | A2 | Inference embedding | **In-process `ort`** | No IPC serialization overhead; direct EP control. |
 | A3 | GPU EP strategy | **DirectML (Win) + CUDA (Linux NVIDIA) + CPU fallback; CoreML later** | One Windows binary covers NVIDIA+AMD. Linux AMD → CPU (ROCm packaging cost too high for v1). |
-| A4 | Model registry | **`u2netp`, `isnet-general-use`, `RMBG-1.4`, `RMBG-2.0`** | Turbo / Balanced / Balanced+ / Max Quality. BRIA models are CC BY-NC 4.0 (non-commercial). |
+| A4 | Model registry | **`u2netp`, `isnet-general-use`, `RMBG-1.4`, `birefnet-general-lite`, `RMBG-2.0`** | Turbo / Balanced / Balanced+ / High / Max Quality. BRIA models (Balanced+, Max) are CC BY-NC 4.0; High (BiRefNet-general-lite) is MIT. |
 | A5 | Feature scope (v1) | **Single image: open/drop → process → PNG alpha** | No batch queue, post-edit, video, or manual mask editor. |
 | A6 | Frontend | **React + TypeScript + Vite + Zustand** | Mature UI stack; events for long inference. |
 | A7 | Release targets (v1) | **Windows x64 (NSIS + MSI) + Linux x64 (AppImage + deb + rpm)** | macOS deferred (no device to test). |
