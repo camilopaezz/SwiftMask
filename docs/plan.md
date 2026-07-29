@@ -42,7 +42,7 @@ Easy to get wrong if you only skim the code.
 
 **Models: Rust is source of truth.** Registry + SHA-256 live in `models.rs`; `bun run gen:models` codegen’s static metadata to `models.generated.ts`. Download state comes only from `list_models` at runtime. Pin HF revisions by commit SHA; document CC-BY-NC for BRIA in README and in-app.
 
-**Postprocess:** current models emit a single-channel mask; min-max normalize to [0,255] (no second sigmoid — that produced near-uniform masks). Heavier models get a light Gaussian blur (radius 1.0) for edge feathering.
+**Postprocess:** most models emit a single-channel mask; min-max normalize to [0,255] (no second sigmoid — that produced near-uniform masks on U2Net/ISNet/RMBG). **High (`birefnet-general-lite`)** applies sigmoid then min-max (rembg BiRefNet); raw min-max on unbounded logits looks washed. Heavier models get a light Gaussian blur (radius 1.0) for edge feathering.
 
 **Frontend domain ownership:** `currentImage.ts` owns drop acceptance, output path sync, process/overwrite (A18), event listeners, cancel/clear. Components stay thin over stores + domain calls.
 

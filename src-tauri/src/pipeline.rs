@@ -34,9 +34,11 @@ pub fn postprocess(
     output: &ndarray::ArrayD<f32>,
 ) -> Result<GrayImage, AppError> {
     match model_id {
-        "u2netp" | "isnet-general-use" | "rmbg-1.4" | "birefnet-general-lite" | "rmbg-2.0" => {
+        "u2netp" | "isnet-general-use" | "rmbg-1.4" | "rmbg-2.0" => {
             postprocess_minmax(original_size, output)
         }
+        // rembg BiRefNet: sigmoid then min-max (raw min-max on unbounded logits is washed).
+        "birefnet-general-lite" => postprocess_sigmoid_minmax(original_size, output),
         _ => Err(AppError::Pipeline(format!(
             "unknown postprocess model_id {}",
             model_id
@@ -49,13 +51,35 @@ fn postprocess_minmax(
     output: &ndarray::ArrayD<f32>,
 ) -> Result<GrayImage, AppError> {
     let (h, w, logits) = extract_logits(output)?;
-    let min = logits.iter().copied().fold(f32::INFINITY, f32::min);
-    let max = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    normalize_resize_feather(original_size, h, w, &logits)
+}
+
+/// BiRefNet (and rembg's birefnet_general path): apply sigmoid before min-max stretch.
+fn postprocess_sigmoid_minmax(
+    original_size: (u32, u32),
+    output: &ndarray::ArrayD<f32>,
+) -> Result<GrayImage, AppError> {
+    let (h, w, logits) = extract_logits(output)?;
+    let probs: Vec<f32> = logits
+        .iter()
+        .map(|&v| 1.0 / (1.0 + (-v).exp()))
+        .collect();
+    normalize_resize_feather(original_size, h, w, &probs)
+}
+
+fn normalize_resize_feather(
+    original_size: (u32, u32),
+    h: usize,
+    w: usize,
+    values: &[f32],
+) -> Result<GrayImage, AppError> {
+    let min = values.iter().copied().fold(f32::INFINITY, f32::min);
+    let max = values.iter().copied().fold(f32::NEG_INFINITY, f32::max);
     let range = max - min;
     let mut mask = GrayImage::new(w as u32, h as u32);
     for y in 0..h {
         for x in 0..w {
-            let v = logits[y * w + x];
+            let v = values[y * w + x];
             let n = if range == 0.0 { 0.0 } else { (v - min) / range };
             let p = (n * 255.0).round() as u8;
             mask.put_pixel(x as u32, y as u32, image::Luma([p]));
@@ -204,12 +228,15 @@ mod tests {
     }
 
     #[test]
-    fn postprocess_birefnet_general_lite_uses_minmax() {
-        // High (birefnet-general-lite) shares the min-max + feather path for now.
+    fn postprocess_birefnet_general_lite_uses_sigmoid_minmax() {
+        // High (birefnet-general-lite): sigmoid then min-max + feather (rembg BiRefNet).
+        // Large-magnitude logits must not wash out the way raw min-max does.
         let mut data = Vec::with_capacity(16 * 16);
         for _y in 0..16 {
             for x in 0..16 {
-                let v = if x < 8 { 6.0f32 } else { -6.0f32 };
+                // Unbalanced extremes: raw min-max puts the left half near ~0.16
+                // after stretch; sigmoid saturates both sides to ~0/1 first.
+                let v = if x < 8 { 20.0f32 } else { -4.0f32 };
                 data.push(v);
             }
         }
@@ -220,6 +247,12 @@ mod tests {
         let max_pixel = mask.pixels().map(|p| p[0]).max().unwrap();
         assert!(min_pixel < 10);
         assert!(max_pixel > 245);
+        // Interior of the positive half should stay near white after sigmoid saturation.
+        let interior = mask.get_pixel(2, 8)[0];
+        assert!(
+            interior > 240,
+            "expected saturated fg after sigmoid, got {interior}"
+        );
         let edge = mask.get_pixel(8, 8)[0];
         assert!(edge > 10 && edge < 245);
     }
