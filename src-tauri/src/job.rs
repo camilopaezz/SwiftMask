@@ -105,9 +105,9 @@ fn run_inner(
     state.check_cancel()?;
     let timer_infer = StageTimer::start("inferring");
     let ep = (deps.execution_provider)()?;
-    // Scope so the preprocess tensor (~12 MiB at 1024²) is dropped before
-    // postprocess on success. Multi-GB pressure is the ORT session, released
-    // inside with_session when the infer closure returns (success or error).
+    // Scope so the preprocess tensor (e.g. ~12 MiB at 1024², ~3 MiB at 512²) is
+    // dropped before postprocess on success. Multi-GB pressure is the ORT
+    // session, released inside with_session when the infer closure returns.
     let output = {
         let tensor = tensor;
         match (deps.run_inference)(&job.model_id, &ep, &tensor) {

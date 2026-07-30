@@ -37,7 +37,7 @@ pub fn postprocess(
         "u2netp" | "isnet-general-use" | "rmbg-1.4" | "rmbg-2.0" => {
             postprocess_minmax(original_size, output)
         }
-        // rembg BiRefNet: sigmoid then min-max (raw min-max on unbounded logits is washed).
+        // BiRefNet logits: sigmoid then min-max (raw min-max on unbounded logits is washed).
         "birefnet-general-lite" => postprocess_sigmoid_minmax(original_size, output),
         _ => Err(AppError::Pipeline(format!(
             "unknown postprocess model_id {}",
@@ -54,7 +54,7 @@ fn postprocess_minmax(
     normalize_resize_feather(original_size, h, w, &logits)
 }
 
-/// BiRefNet (and rembg's birefnet_general path): apply sigmoid before min-max stretch.
+/// BiRefNet: apply sigmoid before min-max stretch.
 fn postprocess_sigmoid_minmax(
     original_size: (u32, u32),
     output: &ndarray::ArrayD<f32>,
@@ -147,6 +147,21 @@ mod tests {
     }
 
     #[test]
+    fn preprocess_birefnet_general_lite_is_512_imagenet() {
+        // High mode: 512² + ImageNet mean/std (studioludens/birefnet-lite-512).
+        let biref = find_model("birefnet-general-lite").unwrap();
+        let img = DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            64,
+            64,
+            image::Rgb([255, 0, 0]),
+        ));
+        let tensor = preprocess(biref, &img).unwrap();
+        assert_eq!(tensor.shape(), &[1, 3, 512, 512]);
+        let red = tensor[[0, 0, 10, 10]];
+        assert!((red - (1.0 - 0.485) / 0.229).abs() < 1e-5);
+    }
+
+    #[test]
     fn postprocess_u2netp_min_max_normalization() {
         let mut data = Vec::with_capacity(64 * 64);
         for y in 0..64 {
@@ -229,7 +244,7 @@ mod tests {
 
     #[test]
     fn postprocess_birefnet_general_lite_uses_sigmoid_minmax() {
-        // High (birefnet-general-lite): sigmoid then min-max + feather (rembg BiRefNet).
+        // High (birefnet-general-lite): sigmoid then min-max + feather (BiRefNet logits).
         // Large-magnitude logits must not wash out the way raw min-max does.
         let mut data = Vec::with_capacity(16 * 16);
         for _y in 0..16 {

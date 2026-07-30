@@ -1,7 +1,7 @@
-//! Manual smoke: load BiRefNet-general-lite ONNX, run inference, dump masks.
+//! Manual smoke: load High-mode BiRefNet lite-512 ONNX, run inference, dump masks.
 //!
 //! ```bash
-//! BIREFNET_ONNX=/tmp/swiftmask-models/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx \
+//! BIREFNET_ONNX=/tmp/swiftmask-models/birefnet-lite-512.onnx \
 //! BIREFNET_IMAGE=/home/camilo/Pictures/Gisele_Bundchen2.jpg \
 //! cargo test --manifest-path src-tauri/Cargo.toml --test smoke_birefnet_lite -- --nocapture
 //! ```
@@ -144,9 +144,9 @@ fn birefnet_general_lite_smoke() {
     );
 
     let model = models::find_model("birefnet-general-lite").unwrap();
-    assert_eq!(model.input_size, 1024);
+    assert_eq!(model.input_size, 512);
     let tensor = pipeline::preprocess(model, &image).unwrap();
-    assert_eq!(tensor.shape(), &[1, 3, 1024, 1024]);
+    assert_eq!(tensor.shape(), &[1, 3, 512, 512]);
 
     let model_bytes = std::fs::read(&onnx).unwrap();
     assert_eq!(model_bytes.len() as u64, model.size_bytes);
