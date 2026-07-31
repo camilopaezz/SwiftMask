@@ -320,6 +320,8 @@ export async function clearQueue(): Promise<void> {
     if (!ok) return;
     await cancelQueueProcess();
   }
+  const { stopFolderWatch } = await import("./folderWatch");
+  await stopFolderWatch();
   queueStore.getState().clearAll();
 }
 

@@ -537,6 +537,21 @@ button.titlebar-close:hover:not(:disabled) {
   min-width: 0;
 }
 
+.watch-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  user-select: none;
+  cursor: pointer;
+}
+
+.watch-toggle input {
+  width: auto;
+  accent-color: var(--accent);
+}
+
 /* ── Mode selector ─────────────────────────────────────── */
 
 .mode-selector {

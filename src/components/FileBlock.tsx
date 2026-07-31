@@ -1,5 +1,6 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { clearCurrent, isProcessBusy } from "../lib/currentImage";
+import { setFolderWatch } from "../lib/folderWatch";
 import { openImageFile } from "../lib/openImage";
 import { clearQueue, folderDisplayName, pickAndOpenFolder } from "../lib/queue";
 import { isQueueRunActive } from "../lib/queueRunner";
@@ -73,6 +74,19 @@ export function FileBlock() {
           <div className="file-block-empty" style={{ marginTop: -4 }}>
             Drop more to append
           </div>
+        )}
+        {source?.kind === "folder" && (
+          <label className="watch-toggle">
+            <input
+              type="checkbox"
+              checked={source.watch}
+              disabled={busy && !source.watch}
+              onChange={(e) => {
+                void setFolderWatch(e.target.checked);
+              }}
+            />
+            <span>Watch folder</span>
+          </label>
         )}
         <div className="file-block-actions">
           <button

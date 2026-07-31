@@ -353,6 +353,17 @@ pub async fn path_is_dir(path: String) -> bool {
 
 /// Folder picker that does **not** write Settings output_dir (batch open folder).
 #[tauri::command]
+pub async fn watch_folder_start(app: AppHandle, path: String) -> Result<(), AppError> {
+    crate::folder_watch::start_watch(app, path)
+}
+
+#[tauri::command]
+pub async fn watch_folder_stop(app: AppHandle) -> Result<(), AppError> {
+    crate::folder_watch::stop_watch(&app);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, AppError> {
     let dialog = app.dialog().file();
     let (tx, rx) = tokio::sync::oneshot::channel();

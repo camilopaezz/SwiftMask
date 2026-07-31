@@ -56,6 +56,7 @@ export type QueueActions = {
   markFailed: (id: string, error: QueueItemError) => void;
   resetToPending: (id: string) => void;
   retryAllFailed: () => void;
+  setWatch: (watch: boolean) => void;
 };
 
 function sortItems(items: QueueItem[]): QueueItem[] {
@@ -260,6 +261,14 @@ export const queueStore = createStore<QueueState & QueueActions>(
           ),
         ),
       })),
+
+    setWatch: (watch) =>
+      set((state) => {
+        if (state.source?.kind !== "folder") return state;
+        return {
+          source: { ...state.source, watch },
+        };
+      }),
   }),
 );
 
