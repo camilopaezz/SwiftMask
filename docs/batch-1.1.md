@@ -107,7 +107,7 @@ Watch (folder only, opt-in)  →  append; auto-run new files after first Process
 
 | Source | Output location |
 |--------|-----------------|
-| Open folder | Sibling **`{folderName}-nobg/`** (create if missing; **reuse** if exists) |
+| Open folder | Sibling **`{folderName}-nobg/`** (path planned on open; **create on Process** if missing; **reuse** if exists) |
 | Drop (one or many) | Current single-image rules: `settings.outputDir` if set, else **next to each input** |
 | Naming (always) | `{stem}-nobg-{modelId}.png` (same as A18) |
 

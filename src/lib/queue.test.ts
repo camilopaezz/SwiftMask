@@ -131,7 +131,6 @@ describe("queue domain", () => {
             "/tmp/product-shots/a.jpg",
             "/tmp/product-shots/b.png",
           ],
-          ensureDir: async () => {},
         },
       );
       expect(result).toBe("enqueued");
@@ -152,7 +151,6 @@ describe("queue domain", () => {
         {
           askConfirm: vi.fn(),
           listImages: async () => [],
-          ensureDir: async () => {},
         },
       );
       expect(result).toBe("empty");
@@ -278,7 +276,6 @@ describe("queue domain", () => {
         {
           askConfirm,
           listImages: async () => ["/tmp/product-shots/a.jpg"],
-          ensureDir: async () => {},
         },
       );
       expect(result).toBe("enqueued");

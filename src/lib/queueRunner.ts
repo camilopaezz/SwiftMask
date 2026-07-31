@@ -18,6 +18,7 @@ import {
 } from "./queueOverwrite";
 import {
   invokeCancelInference,
+  invokeEnsureDir,
   invokePathExists,
   invokeRemoveImageBackground,
   listenInferenceDone,
@@ -37,6 +38,11 @@ export type QueueRunnerDeps = {
   }) => Promise<void>;
   cancelInference: (jobId: string) => Promise<void>;
   getSettings: () => ProcessSettings;
+  /**
+   * Create output directory (and parents) when a folder session first writes.
+   * Not called on Open folder — only when a Process run is about to write.
+   */
+  ensureDir?: (path: string) => Promise<void>;
   /**
    * When true, skip the batch overwrite dialog and always overwrite.
    * Used by folder-watch auto-run (spec §2.5).
@@ -229,6 +235,31 @@ export async function startQueueProcess(
           stage: null,
         });
         succeeded += 1;
+      }
+    }
+  }
+
+  // Create sibling `{folder}-nobg/` only when we are about to write files.
+  const workLeft = queueStore
+    .getState()
+    .items.some((i) => isRunnablePending(i, pendingScope));
+  if (workLeft) {
+    const source = queueStore.getState().source;
+    if (source?.kind === "folder") {
+      const ensureDir = deps.ensureDir ?? invokeEnsureDir;
+      try {
+        await ensureDir(source.outputDir);
+      } catch (err) {
+        runGeneration += 1;
+        clearRunLatch();
+        uiStore.getState().showNotice({
+          severity: "error",
+          title: "Could not create output folder",
+          body: source.outputDir,
+          code: "ensure_dir_failed",
+        });
+        console.error("ensure_dir failed", err);
+        return "blocked";
       }
     }
   }
@@ -450,6 +481,7 @@ export function prodQueueRunnerDeps(): QueueRunnerDeps {
     removeBackground: start.removeBackground,
     cancelInference: cancel.cancelInference,
     getSettings: start.getSettings,
+    ensureDir: invokeEnsureDir,
   };
 }
 

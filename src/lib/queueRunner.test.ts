@@ -46,6 +46,7 @@ function baseDeps(overrides: Partial<QueueRunnerDeps> = {}): QueueRunnerDeps {
     removeBackground: async () => {},
     cancelInference: async () => {},
     getSettings: () => ({ mode: PREFERRED_DEFAULT_MODE, outputDir: null }),
+    ensureDir: async () => {},
     listenProgress: noopListen,
     listenDone: noopListen,
     listenError: noopListen,
@@ -153,6 +154,40 @@ describe("startQueueProcess", () => {
     release("overwrite_all");
     await first;
     expect(queueStore.getState().running).toBe(false);
+  });
+
+  it("creates folder output dir when process starts, not earlier", async () => {
+    queueStore.getState().activateWithItems(
+      [
+        {
+          id: "a",
+          inputPath: "/folder/a.png",
+          outputPath: "/folder-nobg/a-out.png",
+          status: "pending",
+          progress: 0,
+          stage: null,
+          error: null,
+          jobId: null,
+        },
+      ],
+      {
+        kind: "folder",
+        path: "/folder",
+        outputDir: "/folder-nobg",
+        watch: false,
+      },
+    );
+
+    const ensureDir = vi.fn().mockResolvedValue(undefined);
+    await startQueueProcess(
+      baseDeps({
+        ensureDir,
+        removeBackground: async () => {},
+      }),
+    );
+
+    expect(ensureDir).toHaveBeenCalledTimes(1);
+    expect(ensureDir).toHaveBeenCalledWith("/folder-nobg");
   });
 
   it("watch-only scope processes only fromWatch pending items", async () => {

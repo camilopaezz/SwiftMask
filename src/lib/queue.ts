@@ -19,7 +19,6 @@ import {
   waitForQueueIdle,
 } from "./queueRunner";
 import {
-  invokeEnsureDir,
   invokeListFolderImages,
   invokePathIsDir,
   invokePickFolder,
@@ -138,7 +137,6 @@ export async function openFolderAsQueue(
   deps: {
     askConfirm: (message: string) => Promise<boolean>;
     listImages?: (path: string) => Promise<string[]>;
-    ensureDir?: (path: string) => Promise<void>;
   } = {
     askConfirm: (msg) => ask(msg),
   },
@@ -146,7 +144,6 @@ export async function openFolderAsQueue(
   if (isProcessBusy() && !isQueueRunActive()) return "busy";
 
   const listImages = deps.listImages ?? invokeListFolderImages;
-  const ensureDir = deps.ensureDir ?? invokeEnsureDir;
 
   if (!(await confirmReplaceIfNeeded(deps.askConfirm))) {
     return "cancelled";
@@ -174,14 +171,8 @@ export async function openFolderAsQueue(
     if (!ok) return "cancelled";
   }
 
+  // Path only — create `{folder}-nobg/` when Process actually starts (queueRunner).
   const outputDir = deriveFolderOutputDir(folderPath);
-  try {
-    await ensureDir(outputDir);
-  } catch (err) {
-    console.error("ensure_dir failed", err);
-    showInfo("Could not create output folder", outputDir);
-    return "failed";
-  }
 
   imageStore.getState().clear();
   const source: QueueSource = {
