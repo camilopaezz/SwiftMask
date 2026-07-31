@@ -1002,6 +1002,62 @@ button.mode-option-download:disabled {
   flex-shrink: 0;
 }
 
+.queue-drawer-pill.is-live {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.queue-drawer-pill.is-error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.queue-row.is-failed {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.queue-status.done {
+  color: #4ade80;
+}
+
+.queue-status.processing {
+  color: var(--accent);
+}
+
+.queue-status.failed {
+  color: var(--danger);
+}
+
+.queue-meta.error {
+  color: var(--danger);
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-progress {
+  height: 2px;
+  margin: 0 8px 4px 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg-muted) 20%, transparent);
+  overflow: hidden;
+}
+
+.queue-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.queue-row-retry {
+  flex: 0 0 auto;
+  width: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  color: var(--fg-muted);
+}
+
 .queue-drawer-sub {
   font-size: 0.75rem;
   color: var(--fg-muted);

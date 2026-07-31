@@ -11,8 +11,9 @@ import {
   QUEUE_ENQUEUE_CONFIRM_THRESHOLD,
   removeQueueItem,
 } from "./queue";
+import { resolveBatchOverwrite } from "./queueOverwrite";
 
-describe("queue domain (CP1)", () => {
+describe("queue domain", () => {
   beforeEach(() => {
     resetProcessGateForTests();
     imageStore.setState({ current: null });
@@ -158,9 +159,71 @@ describe("queue domain (CP1)", () => {
         { mode: "u2netp", outputDir: null },
         { askConfirm: vi.fn() },
       );
-      clearQueue();
+      await clearQueue();
       expect(queueStore.getState().items).toHaveLength(0);
       expect(queueStore.getState().active).toBe(false);
     });
+  });
+
+  describe("status helpers", () => {
+    it("marks done items to the bottom of the sort", async () => {
+      await enqueueFromDrop(
+        ["/tmp/a.jpg", "/tmp/b.jpg"],
+        { mode: "u2netp", outputDir: null },
+        { askConfirm: vi.fn() },
+      );
+      const a = queueStore
+        .getState()
+        .items.find((i) => i.inputPath.endsWith("a.jpg"));
+      expect(a).toBeTruthy();
+      queueStore.getState().markDone(a!.id, "/tmp/a-nobg.png");
+      const statuses = queueStore.getState().items.map((i) => i.status);
+      expect(statuses[statuses.length - 1]).toBe("done");
+    });
+
+    it("retryAllFailed resets failed to pending", async () => {
+      await enqueueFromDrop(
+        ["/tmp/a.jpg"],
+        { mode: "u2netp", outputDir: null },
+        { askConfirm: vi.fn() },
+      );
+      const id = queueStore.getState().items[0]!.id;
+      queueStore.getState().markFailed(id, { code: "x", message: "boom" });
+      queueStore.getState().retryAllFailed();
+      expect(queueStore.getState().items[0]?.status).toBe("pending");
+    });
+  });
+});
+
+describe("resolveBatchOverwrite", () => {
+  it("returns overwrite_all when nothing exists", async () => {
+    const choice = await resolveBatchOverwrite(
+      ["/a.png", "/b.png"],
+      async () => false,
+      async () => true,
+    );
+    expect(choice).toBe("overwrite_all");
+  });
+
+  it("maps Yes to overwrite_all", async () => {
+    const choice = await resolveBatchOverwrite(
+      ["/a.png"],
+      async () => true,
+      async () => true,
+    );
+    expect(choice).toBe("overwrite_all");
+  });
+
+  it("maps No then Yes to skip_existing", async () => {
+    const ask = vi
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const choice = await resolveBatchOverwrite(
+      ["/a.png"],
+      async () => true,
+      ask,
+    );
+    expect(choice).toBe("skip_existing");
   });
 });

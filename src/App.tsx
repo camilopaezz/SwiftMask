@@ -35,7 +35,11 @@ import {
   onWindowDragMouseDown,
 } from "./lib/windowControls";
 import { useImageStore } from "./stores/imageStore";
-import { queueStore, useQueueStore } from "./stores/queueStore";
+import {
+  queueStore,
+  resolveQueuePreviewId,
+  useQueueStore,
+} from "./stores/queueStore";
 import { settingsStore, useSettingsStore } from "./stores/settingsStore";
 import { useUiStore } from "./stores/uiStore";
 import "./App.css";
@@ -58,6 +62,8 @@ function App() {
   const queueActive = useQueueStore((state) => state.active);
   const queueItems = useQueueStore((state) => state.items);
   const queueSelectedId = useQueueStore((state) => state.selectedId);
+  const queuePinnedId = useQueueStore((state) => state.pinnedId);
+  const queueRunning = useQueueStore((state) => state.running);
   const ep = useSettingsStore((state) => state.ep);
   const mode = useSettingsStore((state) => state.mode);
   const outputDir = useSettingsStore((state) => state.outputDir);
@@ -71,9 +77,20 @@ function App() {
   const themeSyncedRef = useRef(false);
 
   const selectedQueueItem = queueActive
-    ? (queueItems.find((i) => i.id === queueSelectedId) ??
-      queueItems[0] ??
-      null)
+    ? (() => {
+        const id = resolveQueuePreviewId({
+          active: queueActive,
+          items: queueItems,
+          selectedId: queueSelectedId,
+          pinnedId: queuePinnedId,
+          source: null,
+          drawerOpen: true,
+          drawerTouched: false,
+          running: queueRunning,
+          cancelRequested: false,
+        });
+        return queueItems.find((i) => i.id === id) ?? queueItems[0] ?? null;
+      })()
     : null;
 
   useEffect(() => {

@@ -1,11 +1,42 @@
 import { useEffect, useRef, useState } from "react";
 import { clearQueue, removeQueueItem, selectQueueItem } from "../lib/queue";
-import { fileNameFromPath, useQueueStore } from "../stores/queueStore";
+import {
+  fileNameFromPath,
+  type QueueItem,
+  queueStore,
+  useQueueStore,
+} from "../stores/queueStore";
+
+function statusIcon(item: QueueItem): string {
+  switch (item.status) {
+    case "processing":
+      return "●";
+    case "done":
+      return "✓";
+    case "failed":
+      return "!";
+    default:
+      return "○";
+  }
+}
+
+function rowMeta(item: QueueItem): string {
+  if (item.status === "processing") {
+    return `${item.progress}%`;
+  }
+  if (item.status === "failed") {
+    return item.error?.message ?? "failed";
+  }
+  if (item.status === "done") return "done";
+  return "queued";
+}
 
 export function QueueDrawer() {
   const items = useQueueStore((s) => s.items);
   const selectedId = useQueueStore((s) => s.selectedId);
+  const pinnedId = useQueueStore((s) => s.pinnedId);
   const drawerOpen = useQueueStore((s) => s.drawerOpen);
+  const running = useQueueStore((s) => s.running);
   const toggleDrawer = useQueueStore((s) => s.toggleDrawer);
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -30,15 +61,23 @@ export function QueueDrawer() {
   }, [menuOpen]);
 
   const total = items.length;
-  const selected = items.find((i) => i.id === selectedId) ?? items[0];
-  const summaryName = selected
-    ? fileNameFromPath(selected.inputPath)
+  const done = items.filter((i) => i.status === "done").length;
+  const failed = items.filter((i) => i.status === "failed").length;
+  const processing = items.find((i) => i.status === "processing");
+  const previewId = pinnedId ?? selectedId ?? processing?.id ?? items[0]?.id;
+  const preview = items.find((i) => i.id === previewId);
+  const summaryName = preview
+    ? fileNameFromPath(preview.inputPath)
     : "No selection";
 
-  const handleClearAll = () => {
-    setMenuOpen(false);
-    clearQueue();
-  };
+  const pill =
+    failed > 0
+      ? `${done}/${total} · ${failed} failed`
+      : running
+        ? `${done}/${total} · running`
+        : `${done}/${total} · pending`;
+
+  const closeMenu = () => setMenuOpen(false);
 
   const overflowMenu = (
     <div className="queue-overflow" ref={menuRef}>
@@ -57,8 +96,59 @@ export function QueueDrawer() {
       </button>
       {menuOpen && (
         <div className="queue-menu" role="menu">
-          <button type="button" role="menuitem" onClick={handleClearAll}>
-            Clear all
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeMenu();
+              queueStore.getState().clearByStatus("done");
+            }}
+          >
+            Clear completed
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeMenu();
+              queueStore.getState().clearByStatus("failed");
+            }}
+          >
+            Clear failed
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={running}
+            onClick={() => {
+              closeMenu();
+              queueStore.getState().clearByStatus("pending");
+            }}
+          >
+            Clear pending
+          </button>
+          {failed > 0 && (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={running}
+              onClick={() => {
+                closeMenu();
+                queueStore.getState().retryAllFailed();
+              }}
+            >
+              Retry failed
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeMenu();
+              void clearQueue();
+            }}
+          >
+            Clear all…
           </button>
         </div>
       )}
@@ -81,9 +171,17 @@ export function QueueDrawer() {
           <span className="queue-drawer-summary">
             <span className="queue-drawer-title-row">
               <span className="queue-drawer-title">Queue</span>
-              <span className="queue-drawer-pill">0/{total} · pending</span>
+              <span
+                className={`queue-drawer-pill${failed > 0 ? " is-error" : ""}${running ? " is-live" : ""}`}
+              >
+                {pill}
+              </span>
             </span>
-            <span className="queue-drawer-sub">{summaryName}</span>
+            <span className="queue-drawer-sub">
+              {processing
+                ? `${fileNameFromPath(processing.inputPath)} · ${processing.progress}%`
+                : summaryName}
+            </span>
           </span>
         </button>
         {!drawerOpen && overflowMenu}
@@ -94,6 +192,7 @@ export function QueueDrawer() {
           <div className="queue-list-header">
             <span className="queue-list-count">
               {total} image{total === 1 ? "" : "s"}
+              {failed > 0 ? ` · ${failed} failed` : ""}
             </span>
             {overflowMenu}
           </div>
@@ -103,7 +202,7 @@ export function QueueDrawer() {
               return (
                 <li key={item.id}>
                   <div
-                    className={`queue-row${selectedRow ? " is-selected" : ""}`}
+                    className={`queue-row${selectedRow ? " is-selected" : ""}${item.status === "failed" ? " is-failed" : ""}`}
                   >
                     <button
                       type="button"
@@ -111,24 +210,52 @@ export function QueueDrawer() {
                       onClick={() => selectQueueItem(item.id)}
                       title={item.inputPath}
                     >
-                      <span className="queue-status pending" aria-hidden>
-                        ○
+                      <span
+                        className={`queue-status ${item.status}`}
+                        aria-hidden
+                      >
+                        {statusIcon(item)}
                       </span>
                       <span className="queue-name">
                         {fileNameFromPath(item.inputPath)}
                       </span>
-                      <span className="queue-meta">queued</span>
+                      <span
+                        className={`queue-meta${item.status === "failed" ? " error" : ""}`}
+                      >
+                        {rowMeta(item)}
+                      </span>
                     </button>
-                    <button
-                      type="button"
-                      className="queue-row-remove btn-ghost"
-                      title="Remove from queue"
-                      aria-label={`Remove ${fileNameFromPath(item.inputPath)}`}
-                      onClick={() => removeQueueItem(item.id)}
-                    >
-                      ×
-                    </button>
+                    {item.status === "failed" && (
+                      <button
+                        type="button"
+                        className="queue-row-retry btn-ghost"
+                        title="Retry"
+                        aria-label={`Retry ${fileNameFromPath(item.inputPath)}`}
+                        disabled={running}
+                        onClick={() =>
+                          queueStore.getState().resetToPending(item.id)
+                        }
+                      >
+                        ↺
+                      </button>
+                    )}
+                    {item.status !== "processing" && (
+                      <button
+                        type="button"
+                        className="queue-row-remove btn-ghost"
+                        title="Remove from queue"
+                        aria-label={`Remove ${fileNameFromPath(item.inputPath)}`}
+                        onClick={() => removeQueueItem(item.id)}
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
+                  {item.status === "processing" && (
+                    <div className="queue-progress" aria-hidden>
+                      <i style={{ width: `${item.progress}%` }} />
+                    </div>
+                  )}
                 </li>
               );
             })}

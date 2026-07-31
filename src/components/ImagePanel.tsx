@@ -8,9 +8,10 @@ import {
   startProcess,
 } from "../lib/currentImage";
 import { formatError, formatRevealFailedNotice } from "../lib/errorCopy";
+import { cancelQueueProcess, startQueueProcess } from "../lib/queueRunner";
 import { showAppErrorNotice } from "../lib/showAppErrorNotice";
 import { type ImageItem, useImageStore } from "../stores/imageStore";
-import { useQueueStore } from "../stores/queueStore";
+import { fileNameFromPath, useQueueStore } from "../stores/queueStore";
 import { ProgressBar } from "./ProgressBar";
 
 function statusLabel(item: ImageItem): string {
@@ -33,37 +34,62 @@ function statusLabel(item: ImageItem): string {
 export function ImagePanel() {
   const current = useImageStore((state) => state.current);
   const queueActive = useQueueStore((state) => state.active);
-  const queueCount = useQueueStore((state) => state.items.length);
+  const queueItems = useQueueStore((state) => state.items);
+  const queueRunning = useQueueStore((state) => state.running);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancellingRef = useRef(false);
 
   const isProcessing = current?.status === "processing";
-  // Keep Cancel chrome while backend cancel is still freeing the slot.
-  const showCancel = isProcessing || cancelling;
+  const showCancel = queueActive
+    ? queueRunning || cancelling
+    : isProcessing || cancelling;
   const hasImage = Boolean(current);
   const isDone = current?.status === "done";
   const canShowInFolder = isDone && Boolean(current?.outputPath);
-  // CP1: batch Process not implemented — disable while queue UI is active.
-  const processDisabled =
-    queueActive || !hasImage || starting || cancelling || isProcessBusy();
+
+  const pendingCount = queueItems.filter((i) => i.status === "pending").length;
+  const doneCount = queueItems.filter((i) => i.status === "done").length;
+  const failedCount = queueItems.filter((i) => i.status === "failed").length;
+  const processingItem = queueItems.find((i) => i.status === "processing");
+
+  const processDisabled = queueActive
+    ? starting ||
+      cancelling ||
+      queueRunning ||
+      pendingCount === 0 ||
+      isProcessBusy()
+    : !hasImage || starting || cancelling || isProcessBusy();
 
   const handleProcess = async () => {
-    if (processDisabled || !current) return;
+    if (processDisabled) return;
     setStarting(true);
     try {
-      await startProcess(prodStartProcessDeps());
+      if (queueActive) {
+        await startQueueProcess();
+      } else {
+        await startProcess(prodStartProcessDeps());
+      }
     } finally {
       setStarting(false);
     }
   };
 
   const handleCancel = () => {
-    if (cancellingRef.current || !isProcessing) return;
+    if (cancellingRef.current) return;
+    if (queueActive) {
+      if (!queueRunning) return;
+      cancellingRef.current = true;
+      setCancelling(true);
+      void cancelQueueProcess().finally(() => {
+        cancellingRef.current = false;
+        setCancelling(false);
+      });
+      return;
+    }
+    if (!isProcessing) return;
     cancellingRef.current = true;
     setCancelling(true);
-    // Optimistic cancel ends "processing"; keep Cancel disabled until the
-    // backend slot is free so Process cannot start a second overlapping job.
     void cancelProcess(prodCancelDeps()).finally(() => {
       cancellingRef.current = false;
       setCancelling(false);
@@ -83,57 +109,78 @@ export function ImagePanel() {
     }
   };
 
-  // While processing, ProgressBar already shows stage + % — skip duplicate status line.
-  // During cancel wait status is already "cancelled" but Cancel chrome is still up.
   const errorTitle = current?.error
     ? formatError(current.error.code, current.error.message).title
     : null;
-  const statusText = queueActive
-    ? `${queueCount} in queue · batch process next`
-    : !current
-      ? "No image selected"
-      : isProcessing
-        ? null
-        : cancelling
-          ? "Cancelling…"
-          : `${statusLabel(current)}${errorTitle ? `: ${errorTitle}` : ""}`;
+
+  let statusText: string | null;
+  if (queueActive) {
+    if (queueRunning && processingItem) {
+      statusText = `${doneCount}/${queueItems.length} · ${fileNameFromPath(processingItem.inputPath)} · ${processingItem.stage ?? "processing"}`;
+    } else if (cancelling) {
+      statusText = "Cancelling…";
+    } else {
+      statusText = `${queueItems.length} in queue · ${pendingCount} pending${failedCount ? ` · ${failedCount} failed` : ""}`;
+    }
+  } else if (!current) {
+    statusText = "No image selected";
+  } else if (isProcessing) {
+    statusText = null;
+  } else if (cancelling) {
+    statusText = "Cancelling…";
+  } else {
+    statusText = `${statusLabel(current)}${errorTitle ? `: ${errorTitle}` : ""}`;
+  }
 
   return (
     <div className="image-panel">
-      {current && isProcessing && (
+      {queueActive && queueRunning && processingItem && (
+        <ProgressBar
+          stage={processingItem.stage}
+          progress={processingItem.progress}
+        />
+      )}
+      {current && isProcessing && !queueActive && (
         <ProgressBar stage={current.stage} progress={current.progress} />
       )}
 
       {statusText !== null && (
         <div
-          className={`image-panel-status${current?.status === "error" ? " is-error" : ""}`}
+          className={`image-panel-status${current?.status === "error" || failedCount > 0 ? " is-error" : ""}`}
         >
           {statusText}
         </div>
       )}
 
       <div className="image-panel-actions">
-        {canShowInFolder && !showCancel && (
+        {canShowInFolder && !showCancel && !queueActive && (
           <button type="button" onClick={() => void handleShowInFolder()}>
             Show in folder
           </button>
         )}
 
-        {/* Always mount Process when idle so it stays visible (disabled if no image). */}
         {!showCancel ? (
           <button
             type="button"
             className="btn-primary"
             title={
               queueActive
-                ? "Batch process comes in a later step"
+                ? "Process pending (Ctrl+Enter)"
                 : "Process (Ctrl+Enter)"
             }
             onClick={() => void handleProcess()}
             disabled={processDisabled}
             aria-disabled={processDisabled}
           >
-            {starting ? "Starting…" : isDone ? "Re-run" : "Process"}
+            {starting
+              ? "Starting…"
+              : queueActive
+                ? pendingCount > 0
+                  ? `Process (${pendingCount})`
+                  : "Process"
+                : isDone
+                  ? "Re-run"
+                  : "Process"}
           </button>
         ) : (
           <button

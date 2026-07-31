@@ -4,10 +4,10 @@ import { type QueueItem, queueStore } from "../stores/queueStore";
 import { uiStore } from "../stores/uiStore";
 import { isProcessBusy, type ProcessSettings } from "./currentImage";
 import { deriveOutputPath } from "./path";
+import { isQueueRunActive } from "./queueRunner";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "bmp"]);
 
-/** Soft confirm when enqueue would add more than this many new paths at once. */
 export const QUEUE_ENQUEUE_CONFIRM_THRESHOLD = 200;
 
 function getExtension(path: string): string {
@@ -20,7 +20,6 @@ export function isImageFile(path: string): boolean {
 }
 
 function normalizePathKey(path: string): string {
-  // Dedup key: keep OS path as given (Tauri paths are absolute).
   return path;
 }
 
@@ -36,6 +35,10 @@ function makeItems(paths: string[], settings: ProcessSettings): QueueItem[] {
     inputPath,
     outputPath: deriveOutputPath(inputPath, settings.outputDir, settings.mode),
     status: "pending" as const,
+    progress: 0,
+    stage: null,
+    error: null,
+    jobId: null,
   }));
 }
 
@@ -55,14 +58,6 @@ export type EnqueueDropResult =
   | "busy"
   | "cancelled";
 
-/**
- * Handle a Tauri file drop for batch 1.1 CP1.
- * - Images only → enter/append queue UI (even N=1).
- * - Mixed image + non-image paths → reject (covers folder+files until CP4).
- * - Non-images only → toast that open folder is later (covers pure folder drops).
- * - Dedup paths already in the queue.
- * - Soft confirm when new paths > 200.
- */
 export async function enqueueFromDrop(
   paths: string[],
   settings: ProcessSettings,
@@ -70,12 +65,12 @@ export async function enqueueFromDrop(
     askConfirm: (message: string) => Promise<boolean>;
   } = { askConfirm: (msg) => ask(msg) },
 ): Promise<EnqueueDropResult> {
-  if (isProcessBusy()) return "busy";
+  // Allow append while queue is running; block only classic single-image busy.
+  if (isProcessBusy() && !isQueueRunActive()) return "busy";
 
   const imagePaths = paths.filter(isImageFile);
   const nonImagePaths = paths.filter((p) => !isImageFile(p));
 
-  // Pure non-image drop (folder or junk): no queue change.
   if (imagePaths.length === 0) {
     showInfo(
       "Open folder comes in a later step",
@@ -86,7 +81,6 @@ export async function enqueueFromDrop(
     return "rejected";
   }
 
-  // Mixed images + other paths (e.g. folder + files): reject entirely.
   if (nonImagePaths.length > 0) {
     showInfo(
       "Drop either images or one folder",
@@ -105,14 +99,14 @@ export async function enqueueFromDrop(
   if (fresh.length > QUEUE_ENQUEUE_CONFIRM_THRESHOLD) {
     const ok = await deps.askConfirm(`Enqueue ${fresh.length} images?`);
     if (!ok) return "cancelled";
-    if (isProcessBusy()) return "busy";
   }
 
   const items = makeItems(fresh, settings);
   const wasActive = queueStore.getState().active;
 
-  // Entering queue UI leaves the single-image slot.
-  imageStore.getState().clear();
+  if (!wasActive) {
+    imageStore.getState().clear();
+  }
 
   if (wasActive) {
     queueStore.getState().appendItems(items);
@@ -123,7 +117,6 @@ export async function enqueueFromDrop(
   return "enqueued";
 }
 
-/** Load one path into classic single-image UI (Select image / Ctrl+O). */
 export async function loadSingleImage(
   path: string,
   settings: ProcessSettings,
@@ -131,16 +124,19 @@ export async function loadSingleImage(
     askConfirm: (message: string) => Promise<boolean>;
   } = { askConfirm: (msg) => ask(msg) },
 ): Promise<boolean> {
-  if (isProcessBusy()) return false;
+  if (isProcessBusy() || isQueueRunActive()) return false;
   if (!isImageFile(path)) return false;
 
   const q = queueStore.getState();
   if (q.active && q.items.length > 0) {
+    const live = q.running || q.items.some((i) => i.status === "processing");
     const ok = await deps.askConfirm(
-      "Leave the queue and open a single image? The queue will be cleared.",
+      live
+        ? "Leave the queue? Pending work will be cancelled and the queue cleared."
+        : "Leave the queue and open a single image? The queue will be cleared.",
     );
     if (!ok) return false;
-    if (isProcessBusy()) return false;
+    if (isProcessBusy() || isQueueRunActive()) return false;
     queueStore.getState().clearAll();
   }
 
@@ -161,7 +157,14 @@ export function removeQueueItem(id: string): void {
   queueStore.getState().remove(id);
 }
 
-export function clearQueue(): void {
+export async function clearQueue(): Promise<void> {
+  const q = queueStore.getState();
+  if (q.running || q.items.some((i) => i.status === "processing")) {
+    const ok = await ask("Stop processing and clear the queue?");
+    if (!ok) return;
+    const { cancelQueueProcess } = await import("./queueRunner");
+    await cancelQueueProcess();
+  }
   queueStore.getState().clearAll();
 }
 

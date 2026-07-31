@@ -1,15 +1,23 @@
 import { useStore } from "zustand/react";
 import { createStore } from "zustand/vanilla";
 
-/** Queue row status — CP1 only uses pending; later CPs add processing/done/failed. */
 export type QueueItemStatus = "pending" | "processing" | "done" | "failed";
+
+export type QueueItemError = {
+  code: string;
+  message: string;
+};
 
 export type QueueItem = {
   id: string;
   inputPath: string;
-  /** Derived for later process; unused in CP1 run loop. */
   outputPath: string;
   status: QueueItemStatus;
+  progress: number;
+  stage: string | null;
+  error: QueueItemError | null;
+  /** Active inference job id while processing. */
+  jobId: string | null;
 };
 
 export type QueueSource = {
@@ -17,34 +25,68 @@ export type QueueSource = {
 };
 
 export type QueueState = {
-  /** When true, shell shows queue UI instead of single-image current. */
   active: boolean;
   items: QueueItem[];
   selectedId: string | null;
+  /** User pinned a row for preview; null = auto-follow running/selected. */
+  pinnedId: string | null;
   source: QueueSource | null;
   drawerOpen: boolean;
-  /** After first enter this session, remember user toggle. */
   drawerTouched: boolean;
+  /** Serial run in progress. */
+  running: boolean;
+  /** User requested cancel of the current job only. */
+  cancelRequested: boolean;
 };
 
 export type QueueActions = {
   activateWithItems: (items: QueueItem[], source: QueueSource) => void;
   appendItems: (items: QueueItem[]) => void;
   select: (id: string | null) => void;
+  pin: (id: string | null) => void;
   remove: (id: string) => void;
   clearAll: () => void;
+  clearByStatus: (status: QueueItemStatus) => void;
   setDrawerOpen: (open: boolean) => void;
   toggleDrawer: () => void;
+  setRunning: (running: boolean) => void;
+  setCancelRequested: (cancel: boolean) => void;
+  patchItem: (id: string, patch: Partial<QueueItem>) => void;
+  markDone: (id: string, outputPath: string) => void;
+  markFailed: (id: string, error: QueueItemError) => void;
+  resetToPending: (id: string) => void;
+  retryAllFailed: () => void;
 };
 
-const initial: QueueState = {
-  active: false,
-  items: [],
-  selectedId: null,
-  source: null,
-  drawerOpen: true,
-  drawerTouched: false,
-};
+function sortItems(items: QueueItem[]): QueueItem[] {
+  const rank: Record<QueueItemStatus, number> = {
+    processing: 0,
+    pending: 1,
+    failed: 2,
+    done: 3,
+  };
+  return [...items].sort((a, b) => {
+    const d = rank[a.status] - rank[b.status];
+    if (d !== 0) return d;
+    return a.inputPath.localeCompare(b.inputPath);
+  });
+}
+
+function makeEmpty(): QueueState {
+  return {
+    active: false,
+    items: [],
+    selectedId: null,
+    pinnedId: null,
+    source: null,
+    drawerOpen: true,
+    drawerTouched: false,
+    running: false,
+    cancelRequested: false,
+  };
+}
+
+const initial = makeEmpty();
 
 export const queueStore = createStore<QueueState & QueueActions>(
   (set, get) => ({
@@ -55,18 +97,20 @@ export const queueStore = createStore<QueueState & QueueActions>(
       const state = get();
       set({
         active: true,
-        items,
+        items: sortItems(items),
         selectedId: items[0]?.id ?? null,
+        pinnedId: null,
         source,
-        // First enter this session → expanded; later activations keep preference.
         drawerOpen: state.drawerTouched ? state.drawerOpen : true,
+        running: false,
+        cancelRequested: false,
       });
     },
 
     appendItems: (items) => {
       if (items.length === 0) return;
       set((state) => {
-        const next = [...state.items, ...items];
+        const next = sortItems([...state.items, ...items]);
         return {
           active: true,
           items: next,
@@ -77,20 +121,51 @@ export const queueStore = createStore<QueueState & QueueActions>(
       });
     },
 
-    select: (id) => set({ selectedId: id }),
+    select: (id) => set({ selectedId: id, pinnedId: id }),
+
+    pin: (id) => set({ pinnedId: id }),
 
     remove: (id) =>
       set((state) => {
+        const target = state.items.find((i) => i.id === id);
+        if (target?.status === "processing") return state;
         const items = state.items.filter((i) => i.id !== id);
         if (items.length === 0) {
-          return { ...initial };
+          return { ...makeEmpty() };
         }
         const selectedId =
           state.selectedId === id ? (items[0]?.id ?? null) : state.selectedId;
-        return { items, selectedId, active: true };
+        const pinnedId = state.pinnedId === id ? null : state.pinnedId;
+        return { items: sortItems(items), selectedId, pinnedId, active: true };
       }),
 
-    clearAll: () => set({ ...initial }),
+    clearAll: () => set({ ...makeEmpty() }),
+
+    clearByStatus: (status) =>
+      set((state) => {
+        if (status === "processing") return state;
+        const items = state.items.filter((i) => i.status !== status);
+        if (items.length === 0) {
+          return state.running
+            ? {
+                ...state,
+                items: [],
+                selectedId: null,
+                pinnedId: null,
+              }
+            : { ...makeEmpty() };
+        }
+        const selectedStill = items.some((i) => i.id === state.selectedId);
+        return {
+          ...state,
+          items: sortItems(items),
+          selectedId: selectedStill ? state.selectedId : (items[0]?.id ?? null),
+          pinnedId: items.some((i) => i.id === state.pinnedId)
+            ? state.pinnedId
+            : null,
+          active: true,
+        };
+      }),
 
     setDrawerOpen: (open) => set({ drawerOpen: open, drawerTouched: true }),
 
@@ -98,6 +173,92 @@ export const queueStore = createStore<QueueState & QueueActions>(
       set((state) => ({
         drawerOpen: !state.drawerOpen,
         drawerTouched: true,
+      })),
+
+    setRunning: (running) => set({ running, cancelRequested: false }),
+
+    setCancelRequested: (cancel) => set({ cancelRequested: cancel }),
+
+    patchItem: (id, patch) =>
+      set((state) => ({
+        items: sortItems(
+          state.items.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+        ),
+      })),
+
+    markDone: (id, outputPath) =>
+      set((state) => ({
+        items: sortItems(
+          state.items.map((i) =>
+            i.id === id
+              ? {
+                  ...i,
+                  status: "done" as const,
+                  progress: 100,
+                  stage: null,
+                  error: null,
+                  jobId: null,
+                  outputPath,
+                }
+              : i,
+          ),
+        ),
+      })),
+
+    markFailed: (id, error) =>
+      set((state) => ({
+        items: sortItems(
+          state.items.map((i) =>
+            i.id === id
+              ? {
+                  ...i,
+                  status: "failed" as const,
+                  progress: 0,
+                  stage: null,
+                  error,
+                  jobId: null,
+                }
+              : i,
+          ),
+        ),
+        drawerOpen: true,
+        drawerTouched: true,
+      })),
+
+    resetToPending: (id) =>
+      set((state) => ({
+        items: sortItems(
+          state.items.map((i) =>
+            i.id === id
+              ? {
+                  ...i,
+                  status: "pending" as const,
+                  progress: 0,
+                  stage: null,
+                  error: null,
+                  jobId: null,
+                }
+              : i,
+          ),
+        ),
+      })),
+
+    retryAllFailed: () =>
+      set((state) => ({
+        items: sortItems(
+          state.items.map((i) =>
+            i.status === "failed"
+              ? {
+                  ...i,
+                  status: "pending" as const,
+                  progress: 0,
+                  stage: null,
+                  error: null,
+                  jobId: null,
+                }
+              : i,
+          ),
+        ),
       })),
   }),
 );
@@ -114,4 +275,17 @@ export function useQueueStore<T>(
 
 export function fileNameFromPath(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
+}
+
+/** Preview target: pinned, else processing, else selected, else first. */
+export function resolveQueuePreviewId(state: QueueState): string | null {
+  if (state.pinnedId && state.items.some((i) => i.id === state.pinnedId)) {
+    return state.pinnedId;
+  }
+  const processing = state.items.find((i) => i.status === "processing");
+  if (processing) return processing.id;
+  if (state.selectedId && state.items.some((i) => i.id === state.selectedId)) {
+    return state.selectedId;
+  }
+  return state.items[0]?.id ?? null;
 }

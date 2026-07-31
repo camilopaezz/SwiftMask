@@ -1,7 +1,9 @@
 import { formatError } from "../lib/errorCopy";
 import { isModelReady, type ModelMeta, type ModelMode } from "../lib/models";
 import { shouldShowNcBadge } from "../lib/ncLicense";
+import { isQueueRunActive } from "../lib/queueRunner";
 import { useModelDownload } from "../lib/useModelDownload";
+import { useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { DownloadModal } from "./DownloadModal";
 import { NcLicenseModal } from "./NcLicenseModal";
@@ -12,9 +14,11 @@ export function ModeSelector() {
   // Catalog is loaded once in App bootstrap and refreshed after download/cancel.
   const models = useSettingsStore((state) => state.models);
   const download = useModelDownload();
+  const queueRunning = useQueueStore((s) => s.running);
+  const modeLocked = queueRunning || isQueueRunActive();
 
   const handleSelect = (model: ModelMeta) => {
-    if (download.isBusy) return;
+    if (download.isBusy || modeLocked) return;
     if (isModelReady(model)) {
       setMode(model.id as ModelMode);
       return;
@@ -38,6 +42,7 @@ export function ModeSelector() {
               name="mode"
               value={model.id}
               checked={mode === model.id}
+              disabled={modeLocked}
               onChange={() => handleSelect(model)}
             />
             <span className="mode-option-name">{model.name}</span>
