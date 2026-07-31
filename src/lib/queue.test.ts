@@ -37,22 +37,22 @@ describe("queue domain", () => {
 
     it("rejects non-image only drops with notice", async () => {
       const result = await enqueueFromDrop(
-        ["/tmp/notes.txt", "/tmp/dir"],
+        ["/tmp/notes.txt", "/tmp/readme.md"],
         settings,
         {
           askConfirm: vi.fn(),
+          pathIsDir: async () => false,
         },
       );
       expect(result).toBe("rejected");
       expect(queueStore.getState().active).toBe(false);
-      expect(uiStore.getState().notice?.title).toMatch(/folder/i);
     });
 
     it("rejects mixed image + non-image", async () => {
       const result = await enqueueFromDrop(
-        ["/tmp/a.jpg", "/tmp/folder"],
+        ["/tmp/a.jpg", "/tmp/notes.txt"],
         settings,
-        { askConfirm: vi.fn() },
+        { askConfirm: vi.fn(), pathIsDir: async () => false },
       );
       expect(result).toBe("rejected");
       expect(queueStore.getState().items).toHaveLength(0);
@@ -61,6 +61,7 @@ describe("queue domain", () => {
     it("activates queue for multi-image drop even when N=1", async () => {
       const result = await enqueueFromDrop(["/tmp/one.png"], settings, {
         askConfirm: vi.fn(),
+        pathIsDir: async () => false,
       });
       expect(result).toBe("enqueued");
       const q = queueStore.getState();
@@ -75,11 +76,12 @@ describe("queue domain", () => {
     it("appends and dedups on second drop", async () => {
       await enqueueFromDrop(["/tmp/a.jpg", "/tmp/b.jpg"], settings, {
         askConfirm: vi.fn(),
+        pathIsDir: async () => false,
       });
       const result = await enqueueFromDrop(
         ["/tmp/b.jpg", "/tmp/c.jpg"],
         settings,
-        { askConfirm: vi.fn() },
+        { askConfirm: vi.fn(), pathIsDir: async () => false },
       );
       expect(result).toBe("appended");
       const paths = queueStore.getState().items.map((i) => i.inputPath);
@@ -92,9 +94,53 @@ describe("queue domain", () => {
         { length: QUEUE_ENQUEUE_CONFIRM_THRESHOLD + 1 },
         (_, i) => `/tmp/img-${i}.png`,
       );
-      const result = await enqueueFromDrop(many, settings, { askConfirm });
+      const result = await enqueueFromDrop(many, settings, {
+        askConfirm,
+        pathIsDir: async () => false,
+      });
       expect(askConfirm).toHaveBeenCalled();
       expect(result).toBe("cancelled");
+      expect(queueStore.getState().active).toBe(false);
+    });
+  });
+
+  describe("openFolderAsQueue", () => {
+    it("enqueues listed images into sibling output dir", async () => {
+      const { openFolderAsQueue } = await import("./queue");
+      const result = await openFolderAsQueue(
+        "/tmp/product-shots",
+        { mode: "u2netp", outputDir: null },
+        {
+          askConfirm: vi.fn(),
+          listImages: async () => [
+            "/tmp/product-shots/a.jpg",
+            "/tmp/product-shots/b.png",
+          ],
+          ensureDir: async () => {},
+        },
+      );
+      expect(result).toBe("enqueued");
+      const q = queueStore.getState();
+      expect(q.source?.kind).toBe("folder");
+      if (q.source?.kind === "folder") {
+        expect(q.source.outputDir).toBe("/tmp/product-shots-nobg");
+      }
+      expect(q.items).toHaveLength(2);
+      expect(q.items[0]?.outputPath).toContain("/tmp/product-shots-nobg/");
+    });
+
+    it("returns empty when folder has no images", async () => {
+      const { openFolderAsQueue } = await import("./queue");
+      const result = await openFolderAsQueue(
+        "/tmp/empty",
+        { mode: "u2netp", outputDir: null },
+        {
+          askConfirm: vi.fn(),
+          listImages: async () => [],
+          ensureDir: async () => {},
+        },
+      );
+      expect(result).toBe("empty");
       expect(queueStore.getState().active).toBe(false);
     });
   });
@@ -108,6 +154,7 @@ describe("queue domain", () => {
         { mode: "u2netp", outputDir: null },
         {
           askConfirm: vi.fn(),
+          pathIsDir: async () => false,
         },
       );
       const askConfirm = vi.fn().mockResolvedValue(true);
@@ -127,6 +174,7 @@ describe("queue domain", () => {
         { mode: "u2netp", outputDir: null },
         {
           askConfirm: vi.fn(),
+          pathIsDir: async () => false,
         },
       );
       const ok = await loadSingleImage("/tmp/solo.png", settings, {
@@ -145,6 +193,7 @@ describe("queue domain", () => {
         { mode: "u2netp", outputDir: null },
         {
           askConfirm: vi.fn(),
+          pathIsDir: async () => false,
         },
       );
       const id = queueStore.getState().items[0]?.id;
@@ -157,7 +206,7 @@ describe("queue domain", () => {
       await enqueueFromDrop(
         ["/tmp/a.jpg", "/tmp/b.jpg"],
         { mode: "u2netp", outputDir: null },
-        { askConfirm: vi.fn() },
+        { askConfirm: vi.fn(), pathIsDir: async () => false },
       );
       await clearQueue();
       expect(queueStore.getState().items).toHaveLength(0);
@@ -170,7 +219,7 @@ describe("queue domain", () => {
       await enqueueFromDrop(
         ["/tmp/a.jpg", "/tmp/b.jpg"],
         { mode: "u2netp", outputDir: null },
-        { askConfirm: vi.fn() },
+        { askConfirm: vi.fn(), pathIsDir: async () => false },
       );
       const a = queueStore
         .getState()
@@ -185,7 +234,7 @@ describe("queue domain", () => {
       await enqueueFromDrop(
         ["/tmp/a.jpg"],
         { mode: "u2netp", outputDir: null },
-        { askConfirm: vi.fn() },
+        { askConfirm: vi.fn(), pathIsDir: async () => false },
       );
       const id = queueStore.getState().items[0]!.id;
       queueStore.getState().markFailed(id, { code: "x", message: "boom" });

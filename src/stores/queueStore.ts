@@ -20,9 +20,9 @@ export type QueueItem = {
   jobId: string | null;
 };
 
-export type QueueSource = {
-  kind: "drop";
-};
+export type QueueSource =
+  | { kind: "drop" }
+  | { kind: "folder"; path: string; outputDir: string; watch: boolean };
 
 export type QueueState = {
   active: boolean;

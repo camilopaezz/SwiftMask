@@ -15,7 +15,7 @@ import {
   shortcutContextEnabled,
 } from "./keyboardShortcuts";
 import { openImageFile } from "./openImage";
-import { removeQueueItem, selectQueueItem } from "./queue";
+import { pickAndOpenFolder, removeQueueItem, selectQueueItem } from "./queue";
 import {
   cancelQueueProcess,
   isQueueRunActive,
@@ -102,6 +102,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
         case "open": {
           const { mode, outputDir } = settingsStore.getState();
           void openImageFile({ mode, outputDir });
+          break;
+        }
+        case "openFolder": {
+          const { mode, outputDir } = settingsStore.getState();
+          void pickAndOpenFolder({ mode, outputDir });
           break;
         }
         case "process":

@@ -17,7 +17,12 @@ import {
   formatUpdateAvailableNotice,
 } from "./lib/errorCopy";
 import { FALLBACK_DEFAULT_MODE, PREFERRED_DEFAULT_MODE } from "./lib/models";
-import { clearQueue, enqueueFromDrop, selectQueueItem } from "./lib/queue";
+import {
+  clearQueue,
+  enqueueFromDrop,
+  openFolderAsQueue,
+  selectQueueItem,
+} from "./lib/queue";
 import { showAppErrorNotice, showAppNotice } from "./lib/showAppErrorNotice";
 import {
   invokeDetectGpu,
@@ -183,7 +188,7 @@ function App() {
   }, [paths, outputDir, mode]);
 
   // DEV computer-use helpers (not production shortcuts).
-  // Ctrl+Alt+Q inject multi-drop; Ctrl+Alt+C clear queue; Ctrl+Alt+J select next row.
+  // Ctrl+Alt+Q multi-drop; F open folder fixture; C clear; J next row.
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const onKey = (event: KeyboardEvent) => {
@@ -198,9 +203,18 @@ function App() {
         ]);
         return;
       }
+      if (k === "f") {
+        event.preventDefault();
+        const { mode: m, outputDir: o } = settingsStore.getState();
+        void openFolderAsQueue("/tmp/swiftmask-cp4-folder", {
+          mode: m,
+          outputDir: o,
+        });
+        return;
+      }
       if (k === "c") {
         event.preventDefault();
-        clearQueue();
+        void clearQueue();
         return;
       }
       if (k === "j") {

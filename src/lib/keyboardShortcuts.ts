@@ -1,4 +1,4 @@
-export type ShortcutKey = "open" | "process" | "cancel";
+export type ShortcutKey = "open" | "openFolder" | "process" | "cancel";
 
 export type ShortcutContext = {
   enabled: boolean;
@@ -10,6 +10,9 @@ export type ShortcutContext = {
 /** Map a keydown event to a shortcut key, ignoring context. */
 export function matchShortcutKey(event: KeyboardEvent): ShortcutKey | null {
   if (event.key === "Escape") return "cancel";
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "o") {
+    return "openFolder";
+  }
   if (event.ctrlKey && event.key.toLowerCase() === "o") return "open";
   if (event.ctrlKey && event.key === "Enter") return "process";
   return null;
@@ -24,7 +27,8 @@ export function resolveShortcutAction(
 
   switch (key) {
     case "open":
-      return ctx.isBusy ? null : "open";
+    case "openFolder":
+      return ctx.isBusy ? null : key;
     case "process":
       return ctx.isBusy || !ctx.hasImage ? null : "process";
     case "cancel":

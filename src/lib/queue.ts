@@ -1,10 +1,20 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 import { imageStore } from "../stores/imageStore";
-import { type QueueItem, queueStore } from "../stores/queueStore";
+import {
+  type QueueItem,
+  type QueueSource,
+  queueStore,
+} from "../stores/queueStore";
 import { uiStore } from "../stores/uiStore";
 import { isProcessBusy, type ProcessSettings } from "./currentImage";
-import { deriveOutputPath } from "./path";
-import { isQueueRunActive } from "./queueRunner";
+import { baseName, deriveFolderOutputDir, deriveOutputPath } from "./path";
+import { cancelQueueProcess, isQueueRunActive } from "./queueRunner";
+import {
+  invokeEnsureDir,
+  invokeListFolderImages,
+  invokePathIsDir,
+  invokePickFolder,
+} from "./tauri";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "bmp"]);
 
@@ -29,11 +39,25 @@ function existingPathSet(): Set<string> {
   );
 }
 
-function makeItems(paths: string[], settings: ProcessSettings): QueueItem[] {
+/** Effective output dir: folder sibling for folder source, else settings.outputDir. */
+export function queueOutputDir(
+  settings: ProcessSettings,
+  source: QueueSource | null = queueStore.getState().source,
+): string | null {
+  if (source?.kind === "folder") return source.outputDir;
+  return settings.outputDir;
+}
+
+function makeItems(
+  paths: string[],
+  settings: ProcessSettings,
+  source: QueueSource | null,
+): QueueItem[] {
+  const outDir = queueOutputDir(settings, source);
   return paths.map((inputPath) => ({
     id: crypto.randomUUID(),
     inputPath,
-    outputPath: deriveOutputPath(inputPath, settings.outputDir, settings.mode),
+    outputPath: deriveOutputPath(inputPath, outDir, settings.mode),
     status: "pending" as const,
     progress: 0,
     stage: null,
@@ -58,33 +82,160 @@ export type EnqueueDropResult =
   | "busy"
   | "cancelled";
 
+async function confirmReplaceIfNeeded(
+  askConfirm: (message: string) => Promise<boolean>,
+): Promise<boolean> {
+  const q = queueStore.getState();
+  if (!q.active || q.items.length === 0) return true;
+  const live = q.running || q.items.some((i) => i.status === "processing");
+  const ok = await askConfirm(
+    live
+      ? "Replace the current queue? Pending work will be cancelled."
+      : "Replace the current queue with this folder?",
+  );
+  if (!ok) return false;
+  if (q.running || isQueueRunActive()) {
+    await cancelQueueProcess();
+  }
+  queueStore.getState().clearAll();
+  return true;
+}
+
+/**
+ * Open a folder as batch source: top-level images → queue, outputs to `{folder}-nobg/`.
+ */
+export async function openFolderAsQueue(
+  folderPath: string,
+  settings: ProcessSettings,
+  deps: {
+    askConfirm: (message: string) => Promise<boolean>;
+    listImages?: (path: string) => Promise<string[]>;
+    ensureDir?: (path: string) => Promise<void>;
+  } = {
+    askConfirm: (msg) => ask(msg),
+  },
+): Promise<"enqueued" | "empty" | "cancelled" | "busy" | "failed"> {
+  if (isProcessBusy() && !isQueueRunActive()) return "busy";
+
+  const listImages = deps.listImages ?? invokeListFolderImages;
+  const ensureDir = deps.ensureDir ?? invokeEnsureDir;
+
+  if (!(await confirmReplaceIfNeeded(deps.askConfirm))) {
+    return "cancelled";
+  }
+
+  let images: string[];
+  try {
+    images = await listImages(folderPath);
+  } catch (err) {
+    console.error("list_folder_images failed", err);
+    showInfo("Could not read folder", String(err));
+    return "failed";
+  }
+
+  if (images.length === 0) {
+    showInfo(
+      "No images in this folder",
+      "Only top-level PNG, JPG, WEBP, BMP are scanned (subfolders are ignored).",
+    );
+    return "empty";
+  }
+
+  if (images.length > QUEUE_ENQUEUE_CONFIRM_THRESHOLD) {
+    const ok = await deps.askConfirm(`Enqueue ${images.length} images?`);
+    if (!ok) return "cancelled";
+  }
+
+  const outputDir = deriveFolderOutputDir(folderPath);
+  try {
+    await ensureDir(outputDir);
+  } catch (err) {
+    console.error("ensure_dir failed", err);
+    showInfo("Could not create output folder", outputDir);
+    return "failed";
+  }
+
+  imageStore.getState().clear();
+  const source: QueueSource = {
+    kind: "folder",
+    path: folderPath,
+    outputDir,
+    watch: false,
+  };
+  const items = makeItems(images, settings, source);
+  queueStore.getState().activateWithItems(items, source);
+  return "enqueued";
+}
+
+export async function pickAndOpenFolder(
+  settings: ProcessSettings,
+): Promise<boolean> {
+  try {
+    const path = await invokePickFolder();
+    if (!path) return false;
+    const result = await openFolderAsQueue(path, settings);
+    return result === "enqueued";
+  } catch (err) {
+    console.error("pick folder failed", err);
+    showInfo("Could not open folder", String(err));
+    return false;
+  }
+}
+
 export async function enqueueFromDrop(
   paths: string[],
   settings: ProcessSettings,
   deps: {
     askConfirm: (message: string) => Promise<boolean>;
+    pathIsDir?: (path: string) => Promise<boolean>;
   } = { askConfirm: (msg) => ask(msg) },
 ): Promise<EnqueueDropResult> {
-  // Allow append while queue is running; block only classic single-image busy.
   if (isProcessBusy() && !isQueueRunActive()) return "busy";
 
-  const imagePaths = paths.filter(isImageFile);
-  const nonImagePaths = paths.filter((p) => !isImageFile(p));
+  const pathIsDir = deps.pathIsDir ?? invokePathIsDir;
+
+  // Classify directories vs files (Tauri may drop a folder path alone).
+  const dirFlags = await Promise.all(paths.map((p) => pathIsDir(p)));
+  const dirs = paths.filter((_, i) => dirFlags[i]);
+  const files = paths.filter((_, i) => !dirFlags[i]);
+  const imagePaths = files.filter(isImageFile);
+  const nonImageFiles = files.filter((p) => !isImageFile(p));
+
+  if (
+    dirs.length > 0 &&
+    (imagePaths.length > 0 || nonImageFiles.length > 0 || dirs.length > 1)
+  ) {
+    showInfo(
+      "Drop either images or one folder",
+      "Mixed drops and multi-folder drops are not supported.",
+    );
+    return "rejected";
+  }
+
+  if (dirs.length === 1) {
+    const result = await openFolderAsQueue(dirs[0]!, settings, {
+      askConfirm: deps.askConfirm,
+    });
+    if (result === "enqueued") return "enqueued";
+    if (result === "cancelled") return "cancelled";
+    if (result === "busy") return "busy";
+    return "rejected";
+  }
 
   if (imagePaths.length === 0) {
     showInfo(
-      "Open folder comes in a later step",
-      nonImagePaths.length > 0
-        ? "Drop image files to build a queue. Folder open arrives in a later update."
+      "No images dropped",
+      nonImageFiles.length > 0
+        ? "Drop PNG, JPG, WEBP, or BMP files, or one folder."
         : undefined,
     );
     return "rejected";
   }
 
-  if (nonImagePaths.length > 0) {
+  if (nonImageFiles.length > 0) {
     showInfo(
       "Drop either images or one folder",
-      "Mixed drops are not supported. Folder open arrives in a later update.",
+      "Mixed drops are not supported.",
     );
     return "rejected";
   }
@@ -101,8 +252,12 @@ export async function enqueueFromDrop(
     if (!ok) return "cancelled";
   }
 
-  const items = makeItems(fresh, settings);
   const wasActive = queueStore.getState().active;
+  const source = wasActive
+    ? queueStore.getState().source
+    : ({ kind: "drop" } as QueueSource);
+  // Dropping images onto a folder session: append with folder output rules.
+  const items = makeItems(fresh, settings, source);
 
   if (!wasActive) {
     imageStore.getState().clear();
@@ -137,6 +292,7 @@ export async function loadSingleImage(
     );
     if (!ok) return false;
     if (isProcessBusy() || isQueueRunActive()) return false;
+    if (q.running) await cancelQueueProcess();
     queueStore.getState().clearAll();
   }
 
@@ -162,7 +318,6 @@ export async function clearQueue(): Promise<void> {
   if (q.running || q.items.some((i) => i.status === "processing")) {
     const ok = await ask("Stop processing and clear the queue?");
     if (!ok) return;
-    const { cancelQueueProcess } = await import("./queueRunner");
     await cancelQueueProcess();
   }
   queueStore.getState().clearAll();
@@ -172,8 +327,6 @@ export function selectQueueItem(id: string): void {
   queueStore.getState().select(id);
 }
 
-export function getSelectedQueueItem(): QueueItem | null {
-  const { items, selectedId } = queueStore.getState();
-  if (!selectedId) return null;
-  return items.find((i) => i.id === selectedId) ?? null;
+export function folderDisplayName(path: string): string {
+  return baseName(path.replace(/[\\/]+$/, ""));
 }

@@ -18,10 +18,13 @@ const enabledCtx = {
 
 describe("keyboardShortcuts", () => {
   describe("matchShortcutKey", () => {
-    it("maps Ctrl+O, Ctrl+Enter, and Escape", () => {
+    it("maps Ctrl+O, Ctrl+Shift+O, Ctrl+Enter, and Escape", () => {
       expect(matchShortcutKey(keyEvent({ key: "o", ctrlKey: true }))).toBe(
         "open",
       );
+      expect(
+        matchShortcutKey(keyEvent({ key: "O", ctrlKey: true, shiftKey: true })),
+      ).toBe("openFolder");
       expect(matchShortcutKey(keyEvent({ key: "Enter", ctrlKey: true }))).toBe(
         "process",
       );

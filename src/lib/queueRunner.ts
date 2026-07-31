@@ -39,11 +39,7 @@ export type QueueRunnerDeps = {
     handler: (payload: { id: string; output_path: string }) => void,
   ) => Promise<() => void>;
   listenError?: (
-    handler: (payload: {
-      id: string;
-      code?: string;
-      message: string;
-    }) => void,
+    handler: (payload: { id: string; code?: string; message: string }) => void,
   ) => Promise<() => void>;
 };
 
@@ -62,15 +58,18 @@ function showFinishNotice(succeeded: number, failed: number): void {
   });
 }
 
+function effectiveOutputDir(settings: ProcessSettings): string | null {
+  const source = queueStore.getState().source;
+  if (source?.kind === "folder") return source.outputDir;
+  return settings.outputDir;
+}
+
 function refreshOutputPaths(settings: ProcessSettings): void {
   const { items, patchItem } = queueStore.getState();
+  const outDir = effectiveOutputDir(settings);
   for (const item of items) {
     if (item.status !== "pending" && item.status !== "failed") continue;
-    const outputPath = deriveOutputPath(
-      item.inputPath,
-      settings.outputDir,
-      settings.mode,
-    );
+    const outputPath = deriveOutputPath(item.inputPath, outDir, settings.mode);
     if (outputPath !== item.outputPath) {
       patchItem(item.id, { outputPath });
     }
@@ -141,7 +140,7 @@ export async function startQueueProcess(
       const liveSettings = deps.getSettings();
       const outputPath = deriveOutputPath(
         next.inputPath,
-        liveSettings.outputDir,
+        effectiveOutputDir(liveSettings),
         liveSettings.mode,
       );
 

@@ -30,7 +30,11 @@ pub fn run() {
             commands::remove_image_background,
             commands::cancel_inference,
             commands::path_exists,
+            commands::path_is_dir,
             commands::pick_output_dir,
+            commands::pick_folder,
+            commands::list_folder_images,
+            commands::ensure_dir,
             commands::get_runtime_info,
             commands::get_config,
         ])

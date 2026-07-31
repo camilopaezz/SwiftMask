@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { deriveOutputPath } from "./path";
+import { deriveFolderOutputDir, deriveOutputPath } from "./path";
+
+describe("deriveFolderOutputDir", () => {
+  it("creates sibling -nobg folder", () => {
+    expect(deriveFolderOutputDir("/home/user/Pictures/shots")).toBe(
+      "/home/user/Pictures/shots-nobg",
+    );
+  });
+
+  it("handles trailing slash", () => {
+    expect(deriveFolderOutputDir("/home/user/Pictures/shots/")).toBe(
+      "/home/user/Pictures/shots-nobg",
+    );
+  });
+});
 
 describe("deriveOutputPath", () => {
   it("places output next to input when outputDir is unset", () => {

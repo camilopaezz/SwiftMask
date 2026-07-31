@@ -195,11 +195,13 @@ export function PreviewCanvas({
         <div className="preview-empty">
           <p className="preview-empty-title">
             {isDragging
-              ? "Drop images here"
-              : "Drop images here to start a queue"}
+              ? "Drop images or a folder"
+              : "Drop images or a folder to start a queue"}
           </p>
           <p className="preview-empty-formats">PNG, JPG, WEBP, BMP</p>
-          <p className="preview-empty-hint">or Select image · Ctrl+O</p>
+          <p className="preview-empty-hint">
+            Select image · Ctrl+O · Open folder · Ctrl+Shift+O
+          </p>
         </div>
       </div>
     );
