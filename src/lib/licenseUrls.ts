@@ -2,6 +2,7 @@
 const LICENSE_URLS: Readonly<Record<string, string>> = {
   "Apache-2.0": "https://www.apache.org/licenses/LICENSE-2.0",
   "CC BY-NC 4.0": "https://creativecommons.org/licenses/by-nc/4.0/",
+  MIT: "https://opensource.org/licenses/MIT",
 };
 
 export const APP_LINKS = {

@@ -6,14 +6,24 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-31
+
+First stable release. Non-prerelease tags enable the in-app auto-updater (`/releases/latest`).
+
 ### Added
 
+- **High** quality mode (`birefnet-general-lite`, MIT) — mid/high tier between Balanced+ and Max Quality; BiRefNet postprocess uses sigmoid then min-max
+- Signed auto-updater via static `latest.json` on GitHub Releases (Settings → Check for updates; quiet check after launch)
 - About & licenses panel in Settings: app/ORT versions, MIT notice, model license table, GitHub links; external links open in the system browser (including the NC license modal)
 - Release and CI publish extra installers: Linux `.deb` / `.rpm` and Windows `.msi` (alongside AppImage + NSIS)
 
+### Changed
+
+- **High** mode uses [studioludens/birefnet-lite-512](https://huggingface.co/studioludens/birefnet-lite-512) (512×512 ONNX, ~183 MB) instead of rembg’s 1024 BiRefNet-general-lite, to reduce peak VRAM / OOM on constrained GPUs; download URL is pinned to a Hugging Face commit; legacy `birefnet-general-lite.onnx` cache files are purged on model list/download
+
 ### Fixed
 
-- Windows MSI bundling with SemVer pre-release versions (e.g. `0.9.0-beta.1`) by setting a numeric `bundle.windows.wix.version`
+- Windows MSI bundling with SemVer pre-release versions (e.g. `0.9.0-beta.1`) by setting a numeric `bundle.windows.wix.version` (stable `1.0.0` uses the app version directly)
 
 ## [0.9.0-beta.1] - 2026-07-20
 
@@ -52,6 +62,7 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 - Quality modes: Turbo (bundled), Balanced, Balanced+, Max Quality
 - GPU benchmark, model downloads with SHA-256 verification, compare slider export
 
-[Unreleased]: https://github.com/camilopaezz/SwiftMask/compare/v0.9.0-beta.1...HEAD
+[Unreleased]: https://github.com/camilopaezz/SwiftMask/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/camilopaezz/SwiftMask/compare/v0.9.0-beta.1...v1.0.0
 [0.9.0-beta.1]: https://github.com/camilopaezz/SwiftMask/compare/v0.1.0...v0.9.0-beta.1
 [0.1.0]: https://github.com/camilopaezz/SwiftMask/releases/tag/v0.1.0

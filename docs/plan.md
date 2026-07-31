@@ -13,7 +13,7 @@ This file is **why**, not a tour of the tree. Implementation lives in the code; 
 | A1 | Desktop shell | **Tauri 2 + Rust** | Small binary, native EP access via `ort`, multi-platform, low RAM. |
 | A2 | Inference embedding | **In-process `ort`** | No IPC serialization overhead; direct EP control. |
 | A3 | GPU EP strategy | **DirectML (Win) + CUDA (Linux NVIDIA) + CPU fallback; CoreML later** | One Windows binary covers NVIDIA+AMD. Linux AMD → CPU (ROCm packaging cost too high for v1). |
-| A4 | Model registry | **`u2netp`, `isnet-general-use`, `RMBG-1.4`, `RMBG-2.0`** | Turbo / Balanced / Balanced+ / Max Quality. BRIA models are CC BY-NC 4.0 (non-commercial). |
+| A4 | Model registry | **`u2netp`, `isnet-general-use`, `RMBG-1.4`, `birefnet-general-lite`, `RMBG-2.0`** | Turbo / Balanced / Balanced+ / High / Max Quality. BRIA models (Balanced+, Max) are CC BY-NC 4.0; High (`birefnet-lite-512` @ 512², MIT) is MIT. |
 | A5 | Feature scope (v1) | **Single image: open/drop → process → PNG alpha** | No batch queue, post-edit, video, or manual mask editor. |
 | A6 | Frontend | **React + TypeScript + Vite + Zustand** | Mature UI stack; events for long inference. |
 | A7 | Release targets (v1) | **Windows x64 (NSIS + MSI) + Linux x64 (AppImage + deb + rpm)** | macOS deferred (no device to test). |
@@ -42,7 +42,7 @@ Easy to get wrong if you only skim the code.
 
 **Models: Rust is source of truth.** Registry + SHA-256 live in `models.rs`; `bun run gen:models` codegen’s static metadata to `models.generated.ts`. Download state comes only from `list_models` at runtime. Pin HF revisions by commit SHA; document CC-BY-NC for BRIA in README and in-app.
 
-**Postprocess:** current models emit a single-channel mask; min-max normalize to [0,255] (no second sigmoid — that produced near-uniform masks). Heavier models get a light Gaussian blur (radius 1.0) for edge feathering.
+**Postprocess:** most models emit a single-channel mask; min-max normalize to [0,255] (no second sigmoid — that produced near-uniform masks on U2Net/ISNet/RMBG). **High (`birefnet-general-lite` / birefnet-lite-512)** applies sigmoid then min-max (BiRefNet logits); raw min-max on unbounded logits looks washed. Heavier models get a light Gaussian blur (radius 1.0) for edge feathering.
 
 **Frontend domain ownership:** `currentImage.ts` owns drop acceptance, output path sync, process/overwrite (A18), event listeners, cancel/clear. Components stay thin over stores + domain calls.
 
