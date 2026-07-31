@@ -1,10 +1,8 @@
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { clearCurrent, isProcessBusy } from "../lib/currentImage";
 import { setFolderWatch } from "../lib/folderWatch";
 import { openImageFile } from "../lib/openImage";
-import { clearQueue, folderDisplayName, pickAndOpenFolder } from "../lib/queue";
+import { folderDisplayName, pickAndOpenFolder } from "../lib/queue";
 import { isQueueRunActive } from "../lib/queueRunner";
-import { showAppErrorNotice } from "../lib/showAppErrorNotice";
 import { useImageStore } from "../stores/imageStore";
 import { fileNameFromPath, useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -35,19 +33,6 @@ export function FileBlock() {
     clearCurrent();
   };
 
-  const handleClearQueue = () => {
-    void clearQueue();
-  };
-
-  const handleOpenOutputs = async () => {
-    if (source?.kind !== "folder") return;
-    try {
-      await revealItemInDir(source.outputDir);
-    } catch (err) {
-      showAppErrorNotice(err, { code: "reveal_failed" });
-    }
-  };
-
   if (queueActive) {
     const n = queueItems.length;
     const folderLabel =
@@ -66,32 +51,33 @@ export function FileBlock() {
         >
           {folderLabel}
         </div>
-        {source?.kind === "folder" ? (
-          <div className="file-block-empty" style={{ marginTop: -4 }}>
-            Outputs → {folderDisplayName(source.outputDir)}
-          </div>
-        ) : (
+        {source?.kind !== "folder" && (
           <div className="file-block-empty" style={{ marginTop: -4 }}>
             Drop more to append
           </div>
         )}
         {source?.kind === "folder" && (
-          <label className="watch-toggle">
+          <label
+            className={`watch-toggle${source.watch ? " is-on" : ""}${busy && !source.watch ? " is-disabled" : ""}`}
+          >
             <input
               type="checkbox"
+              role="switch"
               checked={source.watch}
               disabled={busy && !source.watch}
               onChange={(e) => {
                 void setFolderWatch(e.target.checked);
               }}
             />
-            <span>Watch folder</span>
+            <span className="watch-toggle-track" aria-hidden>
+              <span className="watch-toggle-thumb" />
+            </span>
+            <span className="watch-toggle-label">Watch folder</span>
           </label>
         )}
         <div className="file-block-actions">
           <button
             type="button"
-            className="btn-primary"
             title="Select image (Ctrl+O)"
             onClick={() => void handleSelect()}
             disabled={busy}
@@ -105,22 +91,6 @@ export function FileBlock() {
             disabled={busy}
           >
             Open folder…
-          </button>
-        </div>
-        <div className="file-block-actions">
-          {source?.kind === "folder" && (
-            <button type="button" onClick={() => void handleOpenOutputs()}>
-              Open outputs
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn-danger"
-            title="Clear queue"
-            onClick={handleClearQueue}
-            disabled={busy && !queueActive}
-          >
-            Clear queue
           </button>
         </div>
       </div>
@@ -160,11 +130,11 @@ export function FileBlock() {
       <div className="file-block-actions">
         <button
           type="button"
-          title="Change image (Ctrl+O)"
+          title="Select image (Ctrl+O)"
           onClick={() => void handleSelect()}
           disabled={busy}
         >
-          Change
+          Select image
         </button>
         <button
           type="button"

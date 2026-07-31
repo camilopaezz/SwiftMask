@@ -34,7 +34,7 @@ Classic **Select image** (Ctrl+O / file picker single) stays the **single-image*
 Select image  →  single-image shell (unchanged)
 Drop images   →  queue UI (append if already in queue)
 Open folder / drop one directory  →  queue UI (replace session)
-Watch (folder only, opt-in)  →  append + auto-run new files
+Watch (folder only, opt-in)  →  append; auto-run new files after first Process
 ```
 
 ---
@@ -58,7 +58,9 @@ Watch (folder only, opt-in)  →  append + auto-run new files
 **Image extensions (existing):** `png`, `jpg`, `jpeg`, `webp`, `bmp`.
 
 **UI chrome (entry):**
-- Left rail: **Select image** + **Open folder…** (two buttons; primary styling on Select image).
+- Left rail: **Select image** + **Open folder…** (two buttons).
+- **Empty state:** primary styling on **Select image**.
+- **Loaded single / queue session:** both actions use secondary chrome (same labels; no “Change”).
 - Dropping a **directory** = Open folder.
 - Canvas empty copy: **“Drop images or a folder to start a queue”** (plus Select image / Open folder hints).
 - Shortcuts: Ctrl+O image, Ctrl+Shift+O folder.
@@ -68,14 +70,18 @@ Watch (folder only, opt-in)  →  append + auto-run new files
 | Source | Start policy |
 |--------|----------------|
 | Open folder / multi-drop | Enqueue only; user hits **Process** |
-| Watch (on) | New settled files **auto-enqueue + auto-process** when worker idle |
+| Watch (on), before first Process | New settled files **auto-enqueue only** (stay pending) |
+| Watch (on), after first manual Process | New settled files **auto-enqueue + auto-process** when worker idle |
+| Watch auto-run scope | **Watch arrivals only** — does not drain open-folder / drop pending that still need Process |
+| Cancel mid-run | Pause watch auto-run until user hits Process again |
 
 ### 2.3 Queue UI layout (Option B — collapsible)
 
 - **Left rail:** brand → folder/source block (path + Watch when folder) → Mode → Process footer.
 - **Main:** preview canvas + **collapsible queue drawer under preview**.
-- **Collapsed bar:** counts (`done/total`), current item, **error badge** if failures > 0, one **⋯** menu.
-- **Expanded:** full list; **one** ⋯ only in list header (never two ⋯ visible at once).
+- **⋯ menu:** always on the **drawer bar** (collapsed and expanded); opens **upward**; never two ⋯ visible.
+- **Collapsed bar:** counts (`done/total`), current item, **error badge** if failures > 0, ⋯.
+- **Expanded:** full list under the bar (count label in list header; no second ⋯).
 - **Enter queue UI:** drawer **expanded** first time this session; then **remember** open/closed.
 - **Auto-expand** on first failure; **do not** auto-collapse on success.
 - **Done items:** stay in list, move to **bottom**, success checkmark.
@@ -111,7 +117,8 @@ Watch (folder only, opt-in)  →  append + auto-run new files
 | Watch auto-run | **Always overwrite** (no dialog) |
 
 - Folder sibling outputs avoid re-ingest under watch (outputs never land inside watched folder).
-- **Open outputs:** folder session → reveal `{folder}-nobg/`; multi-drop → **per-row only**.
+- **Open outputs:** folder session → reveal `{folder}-nobg/` via queue **⋯** menu (not a rail button); multi-drop → **per-row only**.
+- Folder rail shows path + Watch switch; no “Outputs → …” subtitle.
 
 ### 2.6 Watch (folder only)
 
@@ -120,16 +127,19 @@ Watch (folder only, opt-in)  →  append + auto-run new files
 - **Top-level only** (no recursive watch).
 - **Settle:** file size stable **500ms** before enqueue.
 - **Ignore:** `.tmp`, `.temp`, `.crdownload`, `.part`, `.partial`, `~` suffix, `.ds_store`, `thumbs.db`, zero-byte after settle, **dotfiles**, non-image extensions.
+- **Auto-run gate:** idle until first successful **Process** start this session; then armed for watch arrivals only; cancel → paused until Process; clear all / close folder / stop watch → idle.
 - Watch does **not** survive app restart.
 - Quit while watch idle (no pending/running): free quit.
 
 ### 2.7 Clear / leave / quit
 
-**⋯ menu (single):**
+**⋯ menu (single, on drawer bar):**
 - Clear completed  
 - Clear failed  
 - Clear pending  
+- Retry failed (when failures exist)  
 - Clear all… (confirm if pending/running)  
+- Open outputs (folder source)  
 - Close folder (when folder source)
 
 | Action | Effect |
@@ -350,8 +360,8 @@ Do not start phase N+1 until phase N acceptance passes.
 
 **In scope**
 - Watch toggle default **off**; create-only; top-level; 500ms size settle; ignore list (see §2.6).
-- New files → append (dedup) + auto-process when idle; always overwrite outputs.
-- Clear all / Close folder / quit: stop watch.
+- New files → append (dedup); auto-process when idle **only after first manual Process**, and **only watch arrivals** (always overwrite outputs).
+- Clear all / Close folder / quit: stop watch + disarm auto-run.
 - Partial clears do not stop watch.
 - No watch across restart.
 
@@ -361,12 +371,13 @@ Do not start phase N+1 until phase N acceptance passes.
 - Auto-run hook into queue runner from CP2
 
 **Acceptance (computer-use e2e)**
-1. Open folder, enable Watch, Process initial set (or empty folder).
-2. Copy a new image into folder → appears in queue after settle → processes without manual Process.
+1. Open folder, enable Watch **before** Process; copy a new image → enqueues as pending, does **not** auto-process.
+2. Process initial set (or empty pending after Process once); then copy a new image → appears after settle → processes without another manual Process.
 3. Copy `.crdownload` / partial / hidden → ignored.
 4. Disable watch → new files not enqueued.
-5. Clear all → watch off, idle.
+5. Clear all → watch off, auto-run disarmed, idle.
 6. Quit with only watch idle → no blocking dialog.
+
 
 **Commit message suggestion:** `feat(batch): optional folder watch with settle and auto-run (1.1 CP5)`
 
@@ -483,7 +494,7 @@ These are **not** production UI; implement in React + `App.css` patterns.
 | Watch | Opt-in, default off, create-only, folder only |
 | Outputs folder | Sibling `{folder}-nobg/`; drop uses existing rules |
 | Naming | `{stem}-nobg-{modelId}.png` |
-| Start | Manual Process; watch auto-runs |
+| Start | Manual Process first; watch auto-runs after arm, arrivals only |
 | UI mode | Drop/folder → queue; Select image → single |
 | Layout | Collapsible drawer under preview |
 | Fail/cancel | Continue on fail; cancel keeps pending |

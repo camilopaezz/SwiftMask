@@ -23,6 +23,11 @@ export type QueueItem = {
    * Assigned on activate/append when missing (external factories may omit it).
    */
   seq?: number;
+  /**
+   * Enqueued by folder-watch settle. Watch auto-run only drains these until the
+   * user hits Process (which drains all pending).
+   */
+  fromWatch?: boolean;
 };
 
 export type QueueSource =

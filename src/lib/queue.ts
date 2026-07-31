@@ -57,8 +57,10 @@ function makeItems(
   paths: string[],
   settings: ProcessSettings,
   source: QueueSource | null,
+  opts?: { fromWatch?: boolean },
 ): QueueItem[] {
   const outDir = queueOutputDir(settings, source);
+  const fromWatch = opts?.fromWatch === true;
   return paths.map((inputPath) => ({
     id: crypto.randomUUID(),
     inputPath,
@@ -68,6 +70,7 @@ function makeItems(
     stage: null,
     error: null,
     jobId: null,
+    ...(fromWatch ? { fromWatch: true } : {}),
   }));
 }
 
@@ -213,6 +216,8 @@ export async function enqueueFromDrop(
   deps: {
     askConfirm: (message: string) => Promise<boolean>;
     pathIsDir?: (path: string) => Promise<boolean>;
+    /** Mark new rows as watch arrivals (auto-run scope). */
+    fromWatch?: boolean;
   } = { askConfirm: (msg) => ask(msg) },
 ): Promise<EnqueueDropResult> {
   if (isProcessBusy() && !isQueueRunActive()) return "busy";
@@ -282,7 +287,9 @@ export async function enqueueFromDrop(
     ? queueStore.getState().source
     : ({ kind: "drop" } as QueueSource);
   // Dropping images onto a folder session: append with folder output rules.
-  const items = makeItems(fresh, settings, source);
+  const items = makeItems(fresh, settings, source, {
+    fromWatch: deps.fromWatch === true,
+  });
 
   if (!wasActive) {
     imageStore.getState().clear();

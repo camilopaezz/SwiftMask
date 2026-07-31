@@ -10,6 +10,18 @@ import {
   useQueueStore,
 } from "../stores/queueStore";
 
+async function revealPath(path: string) {
+  try {
+    await revealItemInDir(path);
+  } catch (err) {
+    console.error("reveal in folder failed", err);
+    showAppErrorNotice(err, {
+      copy: formatRevealFailedNotice(),
+      code: "reveal_failed",
+    });
+  }
+}
+
 function statusIcon(item: QueueItem): string {
   switch (item.status) {
     case "processing":
@@ -40,6 +52,7 @@ export function QueueDrawer() {
   const pinnedId = useQueueStore((s) => s.pinnedId);
   const drawerOpen = useQueueStore((s) => s.drawerOpen);
   const running = useQueueStore((s) => s.running);
+  const source = useQueueStore((s) => s.source);
   const toggleDrawer = useQueueStore((s) => s.toggleDrawer);
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -153,6 +166,18 @@ export function QueueDrawer() {
           >
             Clear all…
           </button>
+          {source?.kind === "folder" && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeMenu();
+                void revealPath(source.outputDir);
+              }}
+            >
+              Open outputs
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -187,7 +212,7 @@ export function QueueDrawer() {
             </span>
           </span>
         </button>
-        {!drawerOpen && overflowMenu}
+        {overflowMenu}
       </div>
 
       {drawerOpen && (
@@ -197,7 +222,6 @@ export function QueueDrawer() {
               {total} image{total === 1 ? "" : "s"}
               {failed > 0 ? ` · ${failed} failed` : ""}
             </span>
-            {overflowMenu}
           </div>
           <ul className="queue-list" aria-label="Queue items">
             {items.map((item) => {
@@ -249,17 +273,7 @@ export function QueueDrawer() {
                         title="Show in folder"
                         aria-label={`Show ${fileNameFromPath(item.outputPath)} in folder`}
                         onClick={() => {
-                          void (async () => {
-                            try {
-                              await revealItemInDir(item.outputPath);
-                            } catch (err) {
-                              console.error("reveal in folder failed", err);
-                              showAppErrorNotice(err, {
-                                copy: formatRevealFailedNotice(),
-                                code: "reveal_failed",
-                              });
-                            }
-                          })();
+                          void revealPath(item.outputPath);
                         }}
                       >
                         ↗

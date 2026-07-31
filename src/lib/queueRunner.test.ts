@@ -140,4 +140,57 @@ describe("startQueueProcess", () => {
     await first;
     expect(queueStore.getState().running).toBe(false);
   });
+
+  it("watch-only scope processes only fromWatch pending items", async () => {
+    queueStore.getState().activateWithItems(
+      [
+        {
+          id: "seed",
+          inputPath: "/folder/existing.png",
+          outputPath: "/folder-nobg/existing-out.png",
+          status: "pending",
+          progress: 0,
+          stage: null,
+          error: null,
+          jobId: null,
+        },
+        {
+          id: "watch",
+          inputPath: "/folder/new.png",
+          outputPath: "/folder-nobg/new-out.png",
+          status: "pending",
+          progress: 0,
+          stage: null,
+          error: null,
+          jobId: null,
+          fromWatch: true,
+        },
+      ],
+      {
+        kind: "folder",
+        path: "/folder",
+        outputDir: "/folder-nobg",
+        watch: true,
+      },
+    );
+
+    const processed: string[] = [];
+    const result = await startQueueProcess(
+      baseDeps({
+        forceOverwriteAll: true,
+        pendingScope: "watch-only",
+        removeBackground: async (job) => {
+          processed.push(job.inputPath);
+        },
+      }),
+    );
+
+    expect(result).toBe("started");
+    expect(processed).toEqual(["/folder/new.png"]);
+    const byId = Object.fromEntries(
+      queueStore.getState().items.map((i) => [i.id, i.status]),
+    );
+    expect(byId.seed).toBe("pending");
+    expect(byId.watch).toBe("done");
+  });
 });

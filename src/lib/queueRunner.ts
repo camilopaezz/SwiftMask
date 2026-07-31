@@ -1,4 +1,4 @@
-import { queueStore } from "../stores/queueStore";
+import { type QueueItem, queueStore } from "../stores/queueStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
 import {
@@ -41,6 +41,12 @@ export type QueueRunnerDeps = {
    * Used by folder-watch auto-run (spec §2.5).
    */
   forceOverwriteAll?: boolean;
+  /**
+   * Which pending rows this run may drain.
+   * - `all` (default): manual Process — every pending item
+   * - `watch-only`: folder-watch auto-run — only items enqueued via watch
+   */
+  pendingScope?: "all" | "watch-only";
   /** Optional: tests inject no-op listeners; prod uses tauri events. */
   listenProgress?: (
     handler: (payload: { id: string; stage: string; pct: number }) => void,
@@ -52,6 +58,15 @@ export type QueueRunnerDeps = {
     handler: (payload: { id: string; code?: string; message: string }) => void,
   ) => Promise<() => void>;
 };
+
+function isRunnablePending(
+  item: QueueItem,
+  scope: "all" | "watch-only",
+): boolean {
+  if (item.status !== "pending") return false;
+  if (scope === "watch-only") return item.fromWatch === true;
+  return true;
+}
 
 let runLoopActive = false;
 /** Bumped when a run truly starts processing and when force-aborted before the loop. */
@@ -126,20 +141,16 @@ function clearRunLatch(): void {
 export async function startQueueProcess(
   deps: QueueRunnerDeps = prodQueueRunnerDeps(),
 ): Promise<"started" | "busy" | "empty" | "cancelled" | "blocked"> {
-  // Manual Process (or any start) resumes watch auto-run after a user cancel.
-  void import("./folderWatch").then((m) => {
-    m.resumeWatchAutoRun();
-  });
-
   if (runLoopActive || queueStore.getState().running) return "busy";
   if (isProcessBusy()) return "busy";
 
   const settings = deps.getSettings();
   refreshOutputPaths(settings);
+  const pendingScope = deps.pendingScope ?? "all";
 
   const pending = queueStore
     .getState()
-    .items.filter((i) => i.status === "pending");
+    .items.filter((i) => isRunnablePending(i, pendingScope));
   if (pending.length === 0) return "empty";
 
   // Latch before overwrite dialog so a second Process returns busy immediately.
@@ -182,11 +193,19 @@ export async function startQueueProcess(
 
   const stillPending = queueStore
     .getState()
-    .items.filter((i) => i.status === "pending");
+    .items.filter((i) => isRunnablePending(i, pendingScope));
   if (stillPending.length === 0) {
     runGeneration += 1;
     clearRunLatch();
     return "empty";
+  }
+
+  // Manual Process that actually starts arms watch auto-run for later arrivals.
+  // Watch-only auto-runs must not arm themselves.
+  if (pendingScope === "all") {
+    void import("./folderWatch").then((m) => {
+      m.armWatchAutoRun();
+    });
   }
 
   const runOverwritePolicy: Exclude<BatchOverwriteChoice, "cancel"> = choice;
@@ -223,7 +242,7 @@ export async function startQueueProcess(
 
       const next = queueStore
         .getState()
-        .items.find((i) => i.status === "pending");
+        .items.find((i) => isRunnablePending(i, pendingScope));
       if (!next) break;
 
       const liveSettings = deps.getSettings();

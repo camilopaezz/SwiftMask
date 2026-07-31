@@ -16,17 +16,26 @@ import {
 let unsubReady: (() => void) | null = null;
 
 /**
- * After the user cancels a queue run, keep enqueueing watch arrivals but do not
- * auto-start Process until they hit Process (or re-enable watch).
+ * Watch auto-run gate for the current folder session:
+ * - idle: no full Process yet (or session reset) — enqueue only
+ * - armed: auto-process watch arrivals when worker idle
+ * - paused: user cancelled a run — enqueue only until Process again
  */
-let autoRunPaused = false;
+type AutoRunGate = "idle" | "armed" | "paused";
+let autoRunGate: AutoRunGate = "idle";
 
-export function resumeWatchAutoRun(): void {
-  autoRunPaused = false;
+/** User cancelled a queue run — keep enqueueing, stop auto-start until Process. */
+export function pauseWatchAutoRun(): void {
+  if (autoRunGate === "armed") autoRunGate = "paused";
 }
 
-export function pauseWatchAutoRun(): void {
-  autoRunPaused = true;
+/** Manual Process that actually starts arms auto-run for subsequent watch arrivals. */
+export function armWatchAutoRun(): void {
+  autoRunGate = "armed";
+}
+
+export function disarmWatchAutoRun(): void {
+  autoRunGate = "idle";
 }
 
 export async function setFolderWatch(enabled: boolean): Promise<void> {
@@ -38,7 +47,7 @@ export async function setFolderWatch(enabled: boolean): Promise<void> {
     return;
   }
 
-  autoRunPaused = false;
+  // Enabling watch does not arm auto-run — first Process still required.
   await invokeWatchFolderStart(source.path);
   if (!unsubReady) {
     unsubReady = await listenFolderReady((payload) => {
@@ -62,6 +71,8 @@ export async function stopFolderWatch(): Promise<void> {
   if (source?.kind === "folder" && source.watch) {
     queueStore.getState().setWatch(false);
   }
+  // Closing/clearing the watch session resets the Process gate.
+  disarmWatchAutoRun();
 }
 
 async function onFolderReady(path: string): Promise<void> {
@@ -74,13 +85,15 @@ async function onFolderReady(path: string): Promise<void> {
     { mode, outputDir },
     {
       askConfirm: async () => true,
+      fromWatch: true,
     },
   );
   if (result !== "enqueued" && result !== "appended") return;
 
   // Spec §2.5: watch auto-run always overwrites (no dialog).
-  // Spec §2.2: auto-process when worker idle — unless user cancelled (paused).
-  if (autoRunPaused) return;
+  // Auto-process only when armed (after first manual Process), and only
+  // watch arrivals (not leftover open-folder pending).
+  if (autoRunGate !== "armed") return;
   if (isQueueRunActive() || queueStore.getState().running) return;
 
   const base = prodQueueRunnerDeps();
@@ -88,5 +101,6 @@ async function onFolderReady(path: string): Promise<void> {
     ...base,
     exists: invokePathExists,
     forceOverwriteAll: true,
+    pendingScope: "watch-only",
   });
 }
