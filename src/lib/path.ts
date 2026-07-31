@@ -7,6 +7,22 @@ function pathSeparator(...paths: (string | null | undefined)[]): string {
   return "/";
 }
 
+/**
+ * Stable key for queue dedup across separator styles and Windows case.
+ * Linux paths stay case-sensitive; Windows-like paths are lowercased.
+ */
+export function normalizePathKey(path: string): string {
+  const windowsLike = path.includes("\\") || /^[A-Za-z]:/.test(path);
+  let p = path.replace(/\\/g, "/");
+  if (p.length > 1) {
+    p = p.replace(/\/+$/, "");
+  }
+  if (windowsLike) {
+    p = p.toLowerCase();
+  }
+  return p;
+}
+
 export function parentDir(path: string): string {
   const lastSep = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   if (lastSep < 0) return ".";

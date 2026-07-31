@@ -1,4 +1,3 @@
-import { ask } from "@tauri-apps/plugin-dialog";
 import { queueStore } from "../stores/queueStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
@@ -12,6 +11,8 @@ import { ERROR_CODES, parseAppError } from "./parseAppError";
 import { deriveOutputPath } from "./path";
 import {
   type BatchOverwriteChoice,
+  type BatchOverwriteChooser,
+  prodBatchOverwriteChooser,
   resolveBatchOverwrite,
 } from "./queueOverwrite";
 import {
@@ -25,7 +26,8 @@ import {
 
 export type QueueRunnerDeps = {
   exists: (path: string) => Promise<boolean>;
-  ask: (message: string) => Promise<boolean>;
+  /** One-shot overwrite / skip / cancel chooser for existing outputs. */
+  chooseOverwrite: BatchOverwriteChooser;
   removeBackground: (job: {
     id: string;
     inputPath: string;
@@ -153,7 +155,7 @@ export async function startQueueProcess(
       : await resolveBatchOverwrite(
           pending.map((i) => i.outputPath),
           deps.exists,
-          deps.ask,
+          deps.chooseOverwrite,
         );
   } catch (err) {
     runGeneration += 1;
@@ -420,7 +422,7 @@ export function prodQueueRunnerDeps(): QueueRunnerDeps {
   const cancel = prodCancelDeps();
   return {
     exists: start.exists,
-    ask: (msg) => ask(msg),
+    chooseOverwrite: prodBatchOverwriteChooser,
     removeBackground: start.removeBackground,
     cancelInference: cancel.cancelInference,
     getSettings: start.getSettings,

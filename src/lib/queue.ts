@@ -7,7 +7,12 @@ import {
 } from "../stores/queueStore";
 import { uiStore } from "../stores/uiStore";
 import { isProcessBusy, type ProcessSettings } from "./currentImage";
-import { baseName, deriveFolderOutputDir, deriveOutputPath } from "./path";
+import {
+  baseName,
+  deriveFolderOutputDir,
+  deriveOutputPath,
+  normalizePathKey,
+} from "./path";
 import {
   cancelQueueProcess,
   isQueueRunActive,
@@ -31,10 +36,6 @@ function getExtension(path: string): string {
 
 export function isImageFile(path: string): boolean {
   return IMAGE_EXTENSIONS.has(getExtension(path));
-}
-
-function normalizePathKey(path: string): string {
-  return path;
 }
 
 function existingPathSet(): Set<string> {

@@ -29,7 +29,7 @@ const noopListen = async () => () => {};
 function baseDeps(overrides: Partial<QueueRunnerDeps> = {}): QueueRunnerDeps {
   return {
     exists: async () => false,
-    ask: async () => true,
+    chooseOverwrite: async () => "overwrite_all",
     removeBackground: async () => {},
     cancelInference: async () => {},
     getSettings: () => ({ mode: "u2netp", outputDir: null }),
@@ -94,14 +94,10 @@ describe("startQueueProcess", () => {
   it("skip_existing marks existing-output items done and processes the rest", async () => {
     seedPending(["/tmp/exists.png", "/tmp/new.png"]);
     const processed: string[] = [];
-    // First ask: overwrite? No. Second ask: skip and process rest? Yes.
-    const ask = vi
-      .fn()
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+    const chooseOverwrite = vi.fn().mockResolvedValue("skip_existing");
     const deps = baseDeps({
       exists: async (path) => path.includes("exists"),
-      ask,
+      chooseOverwrite,
       removeBackground: async (job) => {
         processed.push(job.inputPath);
       },
@@ -109,6 +105,7 @@ describe("startQueueProcess", () => {
 
     const result = await startQueueProcess(deps);
     expect(result).toBe("started");
+    expect(chooseOverwrite).toHaveBeenCalledTimes(1);
     expect(processed).toEqual(["/tmp/new.png"]);
 
     const byPath = Object.fromEntries(
@@ -122,17 +119,16 @@ describe("startQueueProcess", () => {
 
   it("returns busy while start latch held during slow overwrite dialog", async () => {
     seedPending(["/tmp/a.png"]);
-    let releaseAsk!: (v: boolean) => void;
-    const askPromise = new Promise<boolean>((resolve) => {
-      releaseAsk = resolve;
+    let release!: (v: "overwrite_all") => void;
+    const choosePromise = new Promise<"overwrite_all">((resolve) => {
+      release = resolve;
     });
     const deps = baseDeps({
       exists: async () => true,
-      ask: async () => askPromise,
+      chooseOverwrite: async () => choosePromise,
     });
 
     const first = startQueueProcess(deps);
-    // Allow first call to pass busy checks and set latch before second call.
     await vi.waitFor(() => {
       expect(isQueueRunActive()).toBe(true);
     });
@@ -140,7 +136,7 @@ describe("startQueueProcess", () => {
     const second = await startQueueProcess(baseDeps());
     expect(second).toBe("busy");
 
-    releaseAsk(true); // overwrite_all
+    release("overwrite_all");
     await first;
     expect(queueStore.getState().running).toBe(false);
   });

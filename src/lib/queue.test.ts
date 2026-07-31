@@ -90,6 +90,19 @@ describe("queue domain", () => {
       expect(paths).toEqual(["/tmp/a.jpg", "/tmp/b.jpg", "/tmp/c.jpg"]);
     });
 
+    it("dedups Windows-like paths that only differ by separator/case", async () => {
+      await enqueueFromDrop(["C:\\Pics\\A.JPG"], settings, {
+        askConfirm: vi.fn(),
+        pathIsDir: async () => false,
+      });
+      const result = await enqueueFromDrop(["C:/Pics/a.jpg"], settings, {
+        askConfirm: vi.fn(),
+        pathIsDir: async () => false,
+      });
+      expect(result).toBe("rejected");
+      expect(queueStore.getState().items).toHaveLength(1);
+    });
+
     it("confirms when new paths exceed threshold", async () => {
       const askConfirm = vi.fn().mockResolvedValue(false);
       const many = Array.from(
@@ -307,33 +320,33 @@ describe("queue domain", () => {
 
 describe("resolveBatchOverwrite", () => {
   it("returns overwrite_all when nothing exists", async () => {
+    const choose = vi.fn();
     const choice = await resolveBatchOverwrite(
       ["/a.png", "/b.png"],
       async () => false,
-      async () => true,
+      choose,
     );
     expect(choice).toBe("overwrite_all");
+    expect(choose).not.toHaveBeenCalled();
   });
 
-  it("maps Yes to overwrite_all", async () => {
+  it("forwards one-shot chooser result", async () => {
+    const choose = vi.fn().mockResolvedValue("skip_existing");
     const choice = await resolveBatchOverwrite(
       ["/a.png"],
       async () => true,
-      async () => true,
-    );
-    expect(choice).toBe("overwrite_all");
-  });
-
-  it("maps No then Yes to skip_existing", async () => {
-    const ask = vi
-      .fn()
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
-    const choice = await resolveBatchOverwrite(
-      ["/a.png"],
-      async () => true,
-      ask,
+      choose,
     );
     expect(choice).toBe("skip_existing");
+    expect(choose).toHaveBeenCalledWith({ count: 1 });
+  });
+
+  it("maps cancel from chooser", async () => {
+    const choice = await resolveBatchOverwrite(
+      ["/a.png"],
+      async () => true,
+      async () => "cancel",
+    );
+    expect(choice).toBe("cancel");
   });
 });
