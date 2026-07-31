@@ -12,10 +12,12 @@ import {
   removeQueueItem,
 } from "./queue";
 import { resolveBatchOverwrite } from "./queueOverwrite";
+import * as queueRunner from "./queueRunner";
 
 describe("queue domain", () => {
   beforeEach(() => {
     resetProcessGateForTests();
+    queueRunner.resetQueueRunnerForTests();
     imageStore.setState({ current: null });
     queueStore.getState().clearAll();
     uiStore.getState().dismissNotice();
@@ -168,6 +170,42 @@ describe("queue domain", () => {
       expect(imageStore.getState().current?.status).toBe("ready");
     });
 
+    it("allows confirm while queue run is active (no hard busy block)", async () => {
+      await enqueueFromDrop(
+        ["/tmp/a.jpg"],
+        { mode: "u2netp", outputDir: null },
+        {
+          askConfirm: vi.fn(),
+          pathIsDir: async () => false,
+        },
+      );
+      const activeSpy = vi
+        .spyOn(queueRunner, "isQueueRunActive")
+        .mockReturnValue(true);
+      const cancelSpy = vi
+        .spyOn(queueRunner, "cancelQueueProcess")
+        .mockResolvedValue();
+      const idleSpy = vi
+        .spyOn(queueRunner, "waitForQueueIdle")
+        .mockResolvedValue();
+      try {
+        const askConfirm = vi.fn().mockResolvedValue(true);
+        const ok = await loadSingleImage("/tmp/solo.png", settings, {
+          askConfirm,
+        });
+        expect(ok).toBe(true);
+        expect(askConfirm).toHaveBeenCalled();
+        expect(cancelSpy).toHaveBeenCalled();
+        expect(idleSpy).toHaveBeenCalled();
+        expect(queueStore.getState().active).toBe(false);
+        expect(imageStore.getState().current?.inputPath).toBe("/tmp/solo.png");
+      } finally {
+        activeSpy.mockRestore();
+        cancelSpy.mockRestore();
+        idleSpy.mockRestore();
+      }
+    });
+
     it("aborts when user declines leaving queue", async () => {
       await enqueueFromDrop(
         ["/tmp/a.jpg"],
@@ -211,6 +249,29 @@ describe("queue domain", () => {
       await clearQueue();
       expect(queueStore.getState().items).toHaveLength(0);
       expect(queueStore.getState().active).toBe(false);
+    });
+
+    it("openFolder replace after confirm clears prior queue", async () => {
+      const { openFolderAsQueue } = await import("./queue");
+      await enqueueFromDrop(
+        ["/tmp/old.jpg"],
+        { mode: "u2netp", outputDir: null },
+        { askConfirm: vi.fn(), pathIsDir: async () => false },
+      );
+      const askConfirm = vi.fn().mockResolvedValue(true);
+      const result = await openFolderAsQueue(
+        "/tmp/product-shots",
+        { mode: "u2netp", outputDir: null },
+        {
+          askConfirm,
+          listImages: async () => ["/tmp/product-shots/a.jpg"],
+          ensureDir: async () => {},
+        },
+      );
+      expect(result).toBe("enqueued");
+      expect(askConfirm).toHaveBeenCalled();
+      const paths = queueStore.getState().items.map((i) => i.inputPath);
+      expect(paths).toEqual(["/tmp/product-shots/a.jpg"]);
     });
   });
 

@@ -1,5 +1,8 @@
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
+import { formatRevealFailedNotice } from "../lib/errorCopy";
 import { clearQueue, removeQueueItem, selectQueueItem } from "../lib/queue";
+import { showAppErrorNotice } from "../lib/showAppErrorNotice";
 import {
   fileNameFromPath,
   type QueueItem,
@@ -237,6 +240,29 @@ export function QueueDrawer() {
                         }
                       >
                         ↺
+                      </button>
+                    )}
+                    {item.status === "done" && item.outputPath && (
+                      <button
+                        type="button"
+                        className="queue-row-reveal btn-ghost"
+                        title="Show in folder"
+                        aria-label={`Show ${fileNameFromPath(item.outputPath)} in folder`}
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              await revealItemInDir(item.outputPath);
+                            } catch (err) {
+                              console.error("reveal in folder failed", err);
+                              showAppErrorNotice(err, {
+                                copy: formatRevealFailedNotice(),
+                                code: "reveal_failed",
+                              });
+                            }
+                          })();
+                        }}
+                      >
+                        ↗
                       </button>
                     )}
                     {item.status !== "processing" && (

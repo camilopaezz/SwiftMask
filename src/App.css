@@ -1168,6 +1168,23 @@ button.mode-option-download:disabled {
   flex-shrink: 0;
 }
 
+.queue-row-reveal {
+  flex: 0 0 auto;
+  width: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  color: var(--fg-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.queue-row-reveal:hover {
+  color: var(--accent);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .queue-row-remove {
   flex: 0 0 auto;
   width: 2rem;

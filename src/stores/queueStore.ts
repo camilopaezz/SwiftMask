@@ -18,6 +18,11 @@ export type QueueItem = {
   error: QueueItemError | null;
   /** Active inference job id while processing. */
   jobId: string | null;
+  /**
+   * FIFO order for pending processing and stable display within a status group.
+   * Assigned on activate/append when missing (external factories may omit it).
+   */
+  seq?: number;
 };
 
 export type QueueSource =
@@ -59,6 +64,11 @@ export type QueueActions = {
   setWatch: (watch: boolean) => void;
 };
 
+function itemSeq(item: QueueItem): number {
+  return item.seq ?? 0;
+}
+
+/** Display order: processing → pending (seq) → failed → done (seq). Not path alpha. */
 function sortItems(items: QueueItem[]): QueueItem[] {
   const rank: Record<QueueItemStatus, number> = {
     processing: 0,
@@ -69,7 +79,33 @@ function sortItems(items: QueueItem[]): QueueItem[] {
   return [...items].sort((a, b) => {
     const d = rank[a.status] - rank[b.status];
     if (d !== 0) return d;
-    return a.inputPath.localeCompare(b.inputPath);
+    const seqDiff = itemSeq(a) - itemSeq(b);
+    if (seqDiff !== 0) return seqDiff;
+    // Stable tie-break only (not process order).
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function maxSeq(items: QueueItem[]): number {
+  let max = 0;
+  for (const item of items) {
+    const s = item.seq;
+    if (typeof s === "number" && s > max) max = s;
+  }
+  return max;
+}
+
+/** Assign ascending seq for items missing one; preserve existing seq values. */
+function assignSeqs(items: QueueItem[], existing: QueueItem[]): QueueItem[] {
+  let next = maxSeq(existing) + 1;
+  return items.map((item) => {
+    if (item.seq != null) {
+      if (item.seq >= next) next = item.seq + 1;
+      return item;
+    }
+    const seq = next;
+    next += 1;
+    return { ...item, seq };
   });
 }
 
@@ -96,10 +132,12 @@ export const queueStore = createStore<QueueState & QueueActions>(
     activateWithItems: (items, source) => {
       if (items.length === 0) return;
       const state = get();
+      // Fresh activation: assign seq in array order starting at 1.
+      const withSeq = assignSeqs(items, []);
       set({
         active: true,
-        items: sortItems(items),
-        selectedId: items[0]?.id ?? null,
+        items: sortItems(withSeq),
+        selectedId: withSeq[0]?.id ?? null,
         pinnedId: null,
         source,
         drawerOpen: state.drawerTouched ? state.drawerOpen : true,
@@ -111,11 +149,12 @@ export const queueStore = createStore<QueueState & QueueActions>(
     appendItems: (items) => {
       if (items.length === 0) return;
       set((state) => {
-        const next = sortItems([...state.items, ...items]);
+        const withSeq = assignSeqs(items, state.items);
+        const next = sortItems([...state.items, ...withSeq]);
         return {
           active: true,
           items: next,
-          selectedId: state.selectedId ?? items[0]?.id ?? null,
+          selectedId: state.selectedId ?? withSeq[0]?.id ?? null,
           source: state.source ?? { kind: "drop" },
           drawerOpen: state.drawerTouched ? state.drawerOpen : true,
         };

@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { queueStore } from "../stores/queueStore";
 import { uiStore } from "../stores/uiStore";
-import { type QueueRunnerDeps, startQueueProcess } from "./queueRunner";
+import {
+  isQueueRunActive,
+  type QueueRunnerDeps,
+  resetQueueRunnerForTests,
+  startQueueProcess,
+} from "./queueRunner";
 
 function seedPending(paths: string[]) {
   queueStore.getState().activateWithItems(
@@ -19,8 +24,25 @@ function seedPending(paths: string[]) {
   );
 }
 
+const noopListen = async () => () => {};
+
+function baseDeps(overrides: Partial<QueueRunnerDeps> = {}): QueueRunnerDeps {
+  return {
+    exists: async () => false,
+    ask: async () => true,
+    removeBackground: async () => {},
+    cancelInference: async () => {},
+    getSettings: () => ({ mode: "u2netp", outputDir: null }),
+    listenProgress: noopListen,
+    listenDone: noopListen,
+    listenError: noopListen,
+    ...overrides,
+  };
+}
+
 describe("startQueueProcess", () => {
   beforeEach(() => {
+    resetQueueRunnerForTests();
     queueStore.getState().clearAll();
     uiStore.getState().dismissNotice();
   });
@@ -28,19 +50,11 @@ describe("startQueueProcess", () => {
   it("processes pending items serially and marks done", async () => {
     seedPending(["/tmp/a.png", "/tmp/b.png"]);
     const order: string[] = [];
-    const noopListen = async () => () => {};
-    const deps: QueueRunnerDeps = {
-      exists: async () => false,
-      ask: async () => true,
+    const deps = baseDeps({
       removeBackground: async (job) => {
         order.push(job.inputPath);
       },
-      cancelInference: async () => {},
-      getSettings: () => ({ mode: "u2netp", outputDir: null }),
-      listenProgress: noopListen,
-      listenDone: noopListen,
-      listenError: noopListen,
-    };
+    });
 
     const result = await startQueueProcess(deps);
     expect(result).toBe("started");
@@ -53,21 +67,13 @@ describe("startQueueProcess", () => {
 
   it("continues after a failure", async () => {
     seedPending(["/tmp/bad.png", "/tmp/good.png"]);
-    const noopListen = async () => () => {};
-    const deps: QueueRunnerDeps = {
-      exists: async () => false,
-      ask: async () => true,
+    const deps = baseDeps({
       removeBackground: async (job) => {
         if (job.inputPath.includes("bad")) {
           throw { code: "decode", message: "nope" };
         }
       },
-      cancelInference: async () => {},
-      getSettings: () => ({ mode: "u2netp", outputDir: null }),
-      listenProgress: noopListen,
-      listenDone: noopListen,
-      listenError: noopListen,
-    };
+    });
 
     await startQueueProcess(deps);
     const byPath = Object.fromEntries(
@@ -81,13 +87,61 @@ describe("startQueueProcess", () => {
     seedPending(["/tmp/a.png"]);
     const id = queueStore.getState().items[0]!.id;
     queueStore.getState().markDone(id, "/tmp/a-out.png");
-    const result = await startQueueProcess({
-      exists: async () => false,
-      ask: async () => true,
-      removeBackground: async () => {},
-      cancelInference: async () => {},
-      getSettings: () => ({ mode: "u2netp", outputDir: null }),
-    });
+    const result = await startQueueProcess(baseDeps());
     expect(result).toBe("empty");
+  });
+
+  it("skip_existing marks existing-output items done and processes the rest", async () => {
+    seedPending(["/tmp/exists.png", "/tmp/new.png"]);
+    const processed: string[] = [];
+    // First ask: overwrite? No. Second ask: skip and process rest? Yes.
+    const ask = vi
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const deps = baseDeps({
+      exists: async (path) => path.includes("exists"),
+      ask,
+      removeBackground: async (job) => {
+        processed.push(job.inputPath);
+      },
+    });
+
+    const result = await startQueueProcess(deps);
+    expect(result).toBe("started");
+    expect(processed).toEqual(["/tmp/new.png"]);
+
+    const byPath = Object.fromEntries(
+      queueStore.getState().items.map((i) => [i.inputPath, i]),
+    );
+    expect(byPath["/tmp/exists.png"]!.status).toBe("done");
+    expect(byPath["/tmp/exists.png"]!.progress).toBe(100);
+    expect(byPath["/tmp/new.png"]!.status).toBe("done");
+    expect(queueStore.getState().running).toBe(false);
+  });
+
+  it("returns busy while start latch held during slow overwrite dialog", async () => {
+    seedPending(["/tmp/a.png"]);
+    let releaseAsk!: (v: boolean) => void;
+    const askPromise = new Promise<boolean>((resolve) => {
+      releaseAsk = resolve;
+    });
+    const deps = baseDeps({
+      exists: async () => true,
+      ask: async () => askPromise,
+    });
+
+    const first = startQueueProcess(deps);
+    // Allow first call to pass busy checks and set latch before second call.
+    await vi.waitFor(() => {
+      expect(isQueueRunActive()).toBe(true);
+    });
+
+    const second = await startQueueProcess(baseDeps());
+    expect(second).toBe("busy");
+
+    releaseAsk(true); // overwrite_all
+    await first;
+    expect(queueStore.getState().running).toBe(false);
   });
 });

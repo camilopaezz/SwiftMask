@@ -1,3 +1,5 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import appLogoSvg from "./assets/app-logo.svg?raw";
 import { AboutPanel } from "./components/AboutPanel";
@@ -23,6 +25,7 @@ import {
   openFolderAsQueue,
   selectQueueItem,
 } from "./lib/queue";
+import { cancelQueueProcess, isQueueRunActive } from "./lib/queueRunner";
 import { showAppErrorNotice, showAppNotice } from "./lib/showAppErrorNotice";
 import {
   invokeDetectGpu,
@@ -359,6 +362,70 @@ function App() {
     };
   }, [settingsPresence.open, settingsView]);
 
+  // Confirm quit when the queue still has work (running/pending).
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    const setup = async () => {
+      try {
+        const win = getCurrentWindow();
+        unlisten = await win.onCloseRequested(async (event) => {
+          const q = queueStore.getState();
+          const hasWork =
+            q.running ||
+            isQueueRunActive() ||
+            q.items.some(
+              (i) => i.status === "pending" || i.status === "processing",
+            );
+          if (!hasWork) return;
+
+          event.preventDefault();
+          const ok = await ask(
+            "Queue has unfinished work. Cancel the queue and quit?",
+            { title: "Quit SwiftMask", kind: "warning" },
+          );
+          if (!ok) return;
+          try {
+            if (q.running || isQueueRunActive()) {
+              await cancelQueueProcess();
+            }
+          } catch (err) {
+            console.error("cancel queue on quit failed", err);
+          }
+          await win.destroy().catch((err) => {
+            console.error("window destroy failed", err);
+          });
+        });
+      } catch (err) {
+        // Web / non-Tauri: weak beforeunload fallback only.
+        if (cancelled) return;
+        console.debug("onCloseRequested unavailable", err);
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+          const q = queueStore.getState();
+          const hasWork =
+            q.running ||
+            isQueueRunActive() ||
+            q.items.some(
+              (i) => i.status === "pending" || i.status === "processing",
+            );
+          if (!hasWork) return;
+          e.preventDefault();
+          e.returnValue = "";
+        };
+        window.addEventListener("beforeunload", onBeforeUnload);
+        unlisten = () =>
+          window.removeEventListener("beforeunload", onBeforeUnload);
+      }
+    };
+
+    void setup();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
   const openAbout = () => {
     setSettingsView("about");
   };
@@ -376,11 +443,16 @@ function App() {
   const previewInputPath = queueActive
     ? (selectedQueueItem?.inputPath ?? null)
     : (current?.inputPath ?? null);
-  const previewOutputPath = queueActive ? null : (current?.outputPath ?? null);
-  const canCompare =
-    !queueActive &&
-    current?.status === "done" &&
-    Boolean(current.inputPath && current.outputPath);
+  const previewOutputPath = queueActive
+    ? selectedQueueItem?.status === "done" && selectedQueueItem.outputPath
+      ? selectedQueueItem.outputPath
+      : null
+    : (current?.outputPath ?? null);
+  const canCompare = queueActive
+    ? selectedQueueItem?.status === "done" &&
+      Boolean(selectedQueueItem.inputPath && selectedQueueItem.outputPath)
+    : current?.status === "done" &&
+      Boolean(current.inputPath && current.outputPath);
 
   return (
     <div className={`app-shell${notice ? " has-notice" : ""}`}>

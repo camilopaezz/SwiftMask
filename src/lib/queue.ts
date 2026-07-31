@@ -8,7 +8,11 @@ import {
 import { uiStore } from "../stores/uiStore";
 import { isProcessBusy, type ProcessSettings } from "./currentImage";
 import { baseName, deriveFolderOutputDir, deriveOutputPath } from "./path";
-import { cancelQueueProcess, isQueueRunActive } from "./queueRunner";
+import {
+  cancelQueueProcess,
+  isQueueRunActive,
+  waitForQueueIdle,
+} from "./queueRunner";
 import {
   invokeEnsureDir,
   invokeListFolderImages,
@@ -82,22 +86,42 @@ export type EnqueueDropResult =
   | "busy"
   | "cancelled";
 
+/**
+ * Cancel active run (if any), stop folder watch, clear queue → classic idle.
+ * Shared by clear all, replace folder, leave queue for single-image.
+ */
+async function endQueueSession(): Promise<void> {
+  if (isQueueRunActive()) {
+    await cancelQueueProcess();
+    try {
+      await waitForQueueIdle(10_000);
+    } catch {
+      // Timeout / orphaned running flag: force idle so leave/clear can proceed.
+      queueStore.getState().setRunning(false);
+      queueStore.getState().setCancelRequested(false);
+    }
+  }
+  const { stopFolderWatch } = await import("./folderWatch");
+  await stopFolderWatch();
+  queueStore.getState().clearAll();
+}
+
 async function confirmReplaceIfNeeded(
   askConfirm: (message: string) => Promise<boolean>,
 ): Promise<boolean> {
   const q = queueStore.getState();
   if (!q.active || q.items.length === 0) return true;
-  const live = q.running || q.items.some((i) => i.status === "processing");
+  const live =
+    q.running ||
+    isQueueRunActive() ||
+    q.items.some((i) => i.status === "processing");
   const ok = await askConfirm(
     live
       ? "Replace the current queue? Pending work will be cancelled."
       : "Replace the current queue with this folder?",
   );
   if (!ok) return false;
-  if (q.running || isQueueRunActive()) {
-    await cancelQueueProcess();
-  }
-  queueStore.getState().clearAll();
+  await endQueueSession();
   return true;
 }
 
@@ -279,21 +303,23 @@ export async function loadSingleImage(
     askConfirm: (message: string) => Promise<boolean>;
   } = { askConfirm: (msg) => ask(msg) },
 ): Promise<boolean> {
-  if (isProcessBusy() || isQueueRunActive()) return false;
+  // Classic single-image process busy gate only (queue run may still confirm leave).
+  if (isProcessBusy() && !isQueueRunActive()) return false;
   if (!isImageFile(path)) return false;
 
   const q = queueStore.getState();
   if (q.active && q.items.length > 0) {
-    const live = q.running || q.items.some((i) => i.status === "processing");
+    const live =
+      q.running ||
+      isQueueRunActive() ||
+      q.items.some((i) => i.status === "processing");
     const ok = await deps.askConfirm(
       live
         ? "Leave the queue? Pending work will be cancelled and the queue cleared."
         : "Leave the queue and open a single image? The queue will be cleared.",
     );
     if (!ok) return false;
-    if (isProcessBusy() || isQueueRunActive()) return false;
-    if (q.running) await cancelQueueProcess();
-    queueStore.getState().clearAll();
+    await endQueueSession();
   }
 
   const item = {
@@ -315,14 +341,15 @@ export function removeQueueItem(id: string): void {
 
 export async function clearQueue(): Promise<void> {
   const q = queueStore.getState();
-  if (q.running || q.items.some((i) => i.status === "processing")) {
+  if (
+    q.running ||
+    isQueueRunActive() ||
+    q.items.some((i) => i.status === "processing")
+  ) {
     const ok = await ask("Stop processing and clear the queue?");
     if (!ok) return;
-    await cancelQueueProcess();
   }
-  const { stopFolderWatch } = await import("./folderWatch");
-  await stopFolderWatch();
-  queueStore.getState().clearAll();
+  await endQueueSession();
 }
 
 export function selectQueueItem(id: string): void {

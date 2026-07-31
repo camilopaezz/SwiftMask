@@ -1,8 +1,14 @@
 //! Optional top-level folder watch for batch 1.1 CP5.
 //! Create-only, 500ms size-stable settle, ignore temps/dotfiles/non-images.
+//!
+//! Event policy: only `EventKind::Create` starts a settle task. Rename-into-place
+//! and copy completion typically surface as Create (or Create then size growth
+//! that the settle poll observes). We intentionally do not spawn on Modify, to
+//! avoid reprocessing and unbounded settle tasks on write churn.
 
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -22,16 +28,23 @@ struct FolderReadyPayload {
 
 struct WatchInner {
     _watcher: RecommendedWatcher,
+    /// Paths with an in-flight settle task (one per path).
+    settling: Arc<Mutex<HashSet<PathBuf>>>,
+    /// Bumped on stop so in-flight settles do not emit.
+    generation: Arc<AtomicU64>,
 }
 
 pub struct FolderWatchState {
     inner: Mutex<Option<WatchInner>>,
+    /// Global generation (also bumped on start/stop for diagnostics / future use).
+    generation: AtomicU64,
 }
 
 impl FolderWatchState {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(None),
+            generation: AtomicU64::new(0),
         }
     }
 }
@@ -79,7 +92,13 @@ fn file_size(path: &Path) -> Option<u64> {
 }
 
 /// Spawn settle loop for one path; emits `folder:ready` when size stable 500ms and non-zero.
-fn spawn_settle(app: AppHandle, path: PathBuf) {
+fn spawn_settle(
+    app: AppHandle,
+    path: PathBuf,
+    settling: Arc<Mutex<HashSet<PathBuf>>>,
+    generation: Arc<AtomicU64>,
+    started_gen: u64,
+) {
     tauri::async_runtime::spawn(async move {
         let settle = Duration::from_millis(SETTLE_MS);
         let poll = Duration::from_millis(POLL_MS);
@@ -87,17 +106,38 @@ fn spawn_settle(app: AppHandle, path: PathBuf) {
         let mut stable_since = Instant::now();
         let deadline = Instant::now() + Duration::from_secs(120);
 
+        let prune = || {
+            settling
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&path);
+        };
+
         while Instant::now() < deadline {
+            if generation.load(Ordering::SeqCst) != started_gen {
+                prune();
+                return;
+            }
             tokio::time::sleep(poll).await;
+            if generation.load(Ordering::SeqCst) != started_gen {
+                prune();
+                return;
+            }
             let size = file_size(&path);
             match (last_size, size) {
                 (_, None) => {
                     // vanished
+                    prune();
                     return;
                 }
                 (Some(a), Some(b)) if a == b => {
                     if Instant::now().duration_since(stable_since) >= settle {
                         if b == 0 {
+                            prune();
+                            return;
+                        }
+                        if generation.load(Ordering::SeqCst) != started_gen {
+                            prune();
                             return;
                         }
                         let _ = app.emit(
@@ -106,6 +146,7 @@ fn spawn_settle(app: AppHandle, path: PathBuf) {
                                 path: path.to_string_lossy().into_owned(),
                             },
                         );
+                        prune();
                         return;
                     }
                 }
@@ -115,6 +156,7 @@ fn spawn_settle(app: AppHandle, path: PathBuf) {
                 }
             }
         }
+        prune();
     });
 }
 
@@ -127,25 +169,31 @@ pub fn start_watch(app: AppHandle, folder: String) -> Result<(), AppError> {
     let state = app.state::<Arc<FolderWatchState>>();
     let mut guard = state.inner.lock().unwrap_or_else(|e| e.into_inner());
 
-    // Replace existing watch.
-    *guard = None;
+    // Invalidate any previous in-flight settles.
+    if let Some(prev) = guard.take() {
+        prev.generation.fetch_add(1, Ordering::SeqCst);
+        prev.settling
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+    let gen = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let watch_gen = Arc::new(AtomicU64::new(gen));
+    let settling: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
 
     let app_handle = app.clone();
     let folder_for_cb = folder_path.clone();
-    let pending: Arc<Mutex<HashMap<PathBuf, Instant>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    let pending_cb = Arc::clone(&pending);
+    let settling_cb = Arc::clone(&settling);
+    let watch_gen_cb = Arc::clone(&watch_gen);
+    let gen_for_cb = gen;
 
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
         let Ok(event) = res else {
             return;
         };
-        // Create / rename-into-place / modify (copy completion)
-        let interesting = matches!(
-            event.kind,
-            EventKind::Create(_) | EventKind::Modify(_) | EventKind::Any
-        );
-        if !interesting {
+        // Create-only: starts settle. Size growth is observed by the settle poll.
+        // (Rename-into-place / atomic replace usually appear as Create on Linux/Windows.)
+        if !matches!(event.kind, EventKind::Create(_)) {
             return;
         }
         for path in event.paths {
@@ -153,16 +201,19 @@ pub fn start_watch(app: AppHandle, folder: String) -> Result<(), AppError> {
                 continue;
             }
             {
-                let mut p = pending_cb.lock().unwrap_or_else(|e| e.into_inner());
-                let now = Instant::now();
-                if let Some(last) = p.get(&path) {
-                    if now.duration_since(*last) < Duration::from_millis(200) {
-                        continue;
-                    }
+                let mut s = settling_cb.lock().unwrap_or_else(|e| e.into_inner());
+                if s.contains(&path) {
+                    continue;
                 }
-                p.insert(path.clone(), now);
+                s.insert(path.clone());
             }
-            spawn_settle(app_handle.clone(), path);
+            spawn_settle(
+                app_handle.clone(),
+                path,
+                Arc::clone(&settling_cb),
+                Arc::clone(&watch_gen_cb),
+                gen_for_cb,
+            );
         }
     })
     .map_err(|e| AppError::Dialog(format!("watch failed: {e}")))?;
@@ -173,13 +224,24 @@ pub fn start_watch(app: AppHandle, folder: String) -> Result<(), AppError> {
 
     *guard = Some(WatchInner {
         _watcher: watcher,
+        settling,
+        generation: watch_gen,
     });
     Ok(())
 }
 
 pub fn stop_watch(app: &AppHandle) {
     if let Some(state) = app.try_state::<Arc<FolderWatchState>>() {
+        state.generation.fetch_add(1, Ordering::SeqCst);
         let mut guard = state.inner.lock().unwrap_or_else(|e| e.into_inner());
-        *guard = None;
+        if let Some(inner) = guard.take() {
+            // Bump so in-flight settles exit without emit.
+            inner.generation.fetch_add(1, Ordering::SeqCst);
+            inner
+                .settling
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clear();
+        }
     }
 }

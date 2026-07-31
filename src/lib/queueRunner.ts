@@ -10,7 +10,10 @@ import {
 } from "./currentImage";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
 import { deriveOutputPath } from "./path";
-import { resolveBatchOverwrite } from "./queueOverwrite";
+import {
+  type BatchOverwriteChoice,
+  resolveBatchOverwrite,
+} from "./queueOverwrite";
 import {
   invokeCancelInference,
   invokePathExists,
@@ -31,6 +34,11 @@ export type QueueRunnerDeps = {
   }) => Promise<void>;
   cancelInference: (jobId: string) => Promise<void>;
   getSettings: () => ProcessSettings;
+  /**
+   * When true, skip the batch overwrite dialog and always overwrite.
+   * Used by folder-watch auto-run (spec §2.5).
+   */
+  forceOverwriteAll?: boolean;
   /** Optional: tests inject no-op listeners; prod uses tauri events. */
   listenProgress?: (
     handler: (payload: { id: string; stage: string; pct: number }) => void,
@@ -44,9 +52,37 @@ export type QueueRunnerDeps = {
 };
 
 let runLoopActive = false;
+/** Bumped when a run truly starts processing and when force-aborted before the loop. */
+let runGeneration = 0;
 
 export function isQueueRunActive(): boolean {
   return runLoopActive || queueStore.getState().running;
+}
+
+export function getQueueRunGeneration(): number {
+  return runGeneration;
+}
+
+/**
+ * Poll until the queue run loop is idle.
+ * Callers that mutate the queue after cancel must await this after cancelQueueProcess.
+ */
+export async function waitForQueueIdle(timeoutMs = 60_000): Promise<void> {
+  const start = Date.now();
+  while (runLoopActive || queueStore.getState().running) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("waitForQueueIdle: timed out");
+    }
+    await new Promise((r) => setTimeout(r, 20));
+  }
+}
+
+/** Test-only: clear module latch left by aborted/parallel suite runs. */
+export function resetQueueRunnerForTests(): void {
+  runLoopActive = false;
+  runGeneration += 1;
+  queueStore.getState().setRunning(false);
+  queueStore.getState().setCancelRequested(false);
 }
 
 function showFinishNotice(succeeded: number, failed: number): void {
@@ -76,12 +112,23 @@ function refreshOutputPaths(settings: ProcessSettings): void {
   }
 }
 
+function clearRunLatch(): void {
+  runLoopActive = false;
+  queueStore.getState().setRunning(false);
+  queueStore.getState().setCancelRequested(false);
+}
+
 /**
  * Drain pending queue items serially. Safe to call while already running (no-op).
  */
 export async function startQueueProcess(
   deps: QueueRunnerDeps = prodQueueRunnerDeps(),
 ): Promise<"started" | "busy" | "empty" | "cancelled" | "blocked"> {
+  // Manual Process (or any start) resumes watch auto-run after a user cancel.
+  void import("./folderWatch").then((m) => {
+    m.resumeWatchAutoRun();
+  });
+
   if (runLoopActive || queueStore.getState().running) return "busy";
   if (isProcessBusy()) return "busy";
 
@@ -93,56 +140,113 @@ export async function startQueueProcess(
     .items.filter((i) => i.status === "pending");
   if (pending.length === 0) return "empty";
 
-  const choice = await resolveBatchOverwrite(
-    pending.map((i) => i.outputPath),
-    deps.exists,
-    deps.ask,
-  );
-  if (choice === "cancel") return "cancelled";
-
-  const skipPaths = new Set<string>();
-  if (choice === "skip_existing") {
-    for (const item of pending) {
-      if (await deps.exists(item.outputPath)) {
-        skipPaths.add(item.id);
-      }
-    }
-  }
-
+  // Latch before overwrite dialog so a second Process returns busy immediately.
   runLoopActive = true;
   queueStore.getState().setRunning(true);
+  queueStore.getState().setCancelRequested(false);
+  const startGeneration = ++runGeneration;
+
+  let choice: BatchOverwriteChoice;
+  try {
+    choice = deps.forceOverwriteAll
+      ? "overwrite_all"
+      : await resolveBatchOverwrite(
+          pending.map((i) => i.outputPath),
+          deps.exists,
+          deps.ask,
+        );
+  } catch (err) {
+    runGeneration += 1;
+    clearRunLatch();
+    throw err;
+  }
+
+  if (choice === "cancel") {
+    runGeneration += 1;
+    clearRunLatch();
+    return "cancelled";
+  }
+
+  // Re-validate after dialog: queue may have been cleared or generation bumped.
+  if (
+    startGeneration !== runGeneration ||
+    !queueStore.getState().active ||
+    queueStore.getState().cancelRequested
+  ) {
+    runGeneration += 1;
+    clearRunLatch();
+    return "cancelled";
+  }
+
+  const stillPending = queueStore
+    .getState()
+    .items.filter((i) => i.status === "pending");
+  if (stillPending.length === 0) {
+    runGeneration += 1;
+    clearRunLatch();
+    return "empty";
+  }
+
+  const runOverwritePolicy: Exclude<BatchOverwriteChoice, "cancel"> = choice;
 
   let succeeded = 0;
   let failed = 0;
+  let wasCancelled = false;
 
-  try {
-    // Snapshot order by current store sort; re-read pending each iteration for appends.
-    while (true) {
-      if (queueStore.getState().cancelRequested) break;
-
-      const next = queueStore
-        .getState()
-        .items.find((i) => i.status === "pending" && !skipPaths.has(i.id));
-      if (!next) break;
-
-      // Skip existing for items marked at start.
-      if (skipPaths.has(next.id)) {
-        queueStore.getState().patchItem(next.id, {
+  // Pre-mark skip_existing targets so they never remain pending.
+  if (runOverwritePolicy === "skip_existing") {
+    for (const item of stillPending) {
+      if (await deps.exists(item.outputPath)) {
+        queueStore.getState().patchItem(item.id, {
           status: "done",
           progress: 100,
           stage: null,
         });
         succeeded += 1;
-        continue;
+      }
+    }
+  }
+
+  try {
+    // Snapshot order by current store sort; re-read pending each iteration for appends.
+    while (true) {
+      if (queueStore.getState().cancelRequested) {
+        wasCancelled = true;
+        break;
+      }
+      if (startGeneration !== runGeneration) {
+        wasCancelled = true;
+        break;
       }
 
-      const jobId = crypto.randomUUID();
+      const next = queueStore
+        .getState()
+        .items.find((i) => i.status === "pending");
+      if (!next) break;
+
       const liveSettings = deps.getSettings();
       const outputPath = deriveOutputPath(
         next.inputPath,
         effectiveOutputDir(liveSettings),
         liveSettings.mode,
       );
+
+      // Sticky overwrite policy for mid-run appends (and any remaining exists).
+      if (runOverwritePolicy === "skip_existing") {
+        if (await deps.exists(outputPath)) {
+          queueStore.getState().patchItem(next.id, {
+            status: "done",
+            progress: 100,
+            stage: null,
+            outputPath,
+          });
+          succeeded += 1;
+          continue;
+        }
+      }
+      // overwrite_all: always write (no exists check)
+
+      const jobId = crypto.randomUUID();
 
       queueStore.getState().patchItem(next.id, {
         status: "processing",
@@ -253,6 +357,7 @@ export async function startQueueProcess(
           } catch {
             // slot may already be free
           }
+          wasCancelled = true;
           break;
         }
 
@@ -272,19 +377,29 @@ export async function startQueueProcess(
     runLoopActive = false;
     queueStore.getState().setRunning(false);
     queueStore.getState().setCancelRequested(false);
-    showFinishNotice(succeeded, failed);
+    if (!wasCancelled) {
+      showFinishNotice(succeeded, failed);
+    }
   }
 
   return "started";
 }
 
+/**
+ * Request cancel of the current queue run and best-effort cancel of the active job.
+ * Callers that mutate the queue afterward must await waitForQueueIdle() so the loop exits first.
+ */
 export async function cancelQueueProcess(
   deps: Pick<QueueRunnerDeps, "cancelInference"> = {
     cancelInference: invokeCancelInference,
   },
 ): Promise<void> {
   const state = queueStore.getState();
-  if (!state.running) return;
+  if (!runLoopActive && !state.running) return;
+  // After cancel, watch keeps enqueueing but does not auto-start until Process.
+  void import("./folderWatch").then((m) => {
+    m.pauseWatchAutoRun();
+  });
   queueStore.getState().setCancelRequested(true);
   const current = state.items.find((i) => i.status === "processing");
   if (current?.jobId) {
