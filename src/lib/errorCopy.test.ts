@@ -60,7 +60,7 @@ describe("inventory copy helpers", () => {
       formatRevealFailedNotice,
     } = await import("./errorCopy");
     expect(formatFirstRunGpuDegradeNotice().title).toMatch(/GPU/i);
-    expect(formatModelsUnavailableNotice().body).toMatch(/Turbo/i);
+    expect(formatModelsUnavailableNotice().body).toMatch(/quality mode/i);
     expect(formatDownloadCancelUnconfirmedNotice().title).toMatch(/cancel/i);
     expect(formatRevealFailedNotice().title).toMatch(/folder/i);
   });

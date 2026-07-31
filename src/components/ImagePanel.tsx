@@ -8,10 +8,12 @@ import {
   startProcess,
 } from "../lib/currentImage";
 import { formatError, formatRevealFailedNotice } from "../lib/errorCopy";
+import { isProcessableMode } from "../lib/models";
 import { cancelQueueProcess, startQueueProcess } from "../lib/queueRunner";
 import { showAppErrorNotice } from "../lib/showAppErrorNotice";
 import { type ImageItem, useImageStore } from "../stores/imageStore";
 import { fileNameFromPath, useQueueStore } from "../stores/queueStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import { ProgressBar } from "./ProgressBar";
 
 function statusLabel(item: ImageItem): string {
@@ -36,6 +38,8 @@ export function ImagePanel() {
   const queueActive = useQueueStore((state) => state.active);
   const queueItems = useQueueStore((state) => state.items);
   const queueRunning = useQueueStore((state) => state.running);
+  const mode = useSettingsStore((state) => state.mode);
+  const models = useSettingsStore((state) => state.models);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancellingRef = useRef(false);
@@ -47,6 +51,8 @@ export function ImagePanel() {
   const hasImage = Boolean(current);
   const isDone = current?.status === "done";
   const canShowInFolder = isDone && Boolean(current?.outputPath);
+  // Strict: never Process on Turbo or an undownloaded quality mode.
+  const modeReady = isProcessableMode(mode, models);
 
   const pendingCount = queueItems.filter((i) => i.status === "pending").length;
   const doneCount = queueItems.filter((i) => i.status === "done").length;
@@ -58,8 +64,9 @@ export function ImagePanel() {
       cancelling ||
       queueRunning ||
       pendingCount === 0 ||
+      !modeReady ||
       isProcessBusy()
-    : !hasImage || starting || cancelling || isProcessBusy();
+    : !hasImage || starting || cancelling || !modeReady || isProcessBusy();
 
   const handleProcess = async () => {
     if (processDisabled) return;

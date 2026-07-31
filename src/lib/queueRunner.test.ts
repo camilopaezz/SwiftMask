@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { queueStore } from "../stores/queueStore";
+import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
+import { MODEL_REGISTRY, PREFERRED_DEFAULT_MODE } from "./models";
 import {
   isQueueRunActive,
   type QueueRunnerDeps,
@@ -24,6 +26,17 @@ function seedPending(paths: string[]) {
   );
 }
 
+/** Strict Process gate reads settingsStore — seed a ready user-facing mode. */
+function seedProcessableSettings() {
+  settingsStore.setState({
+    mode: PREFERRED_DEFAULT_MODE,
+    models: MODEL_REGISTRY.map((m) => ({
+      ...m,
+      downloaded: m.bundled || m.id === PREFERRED_DEFAULT_MODE,
+    })),
+  });
+}
+
 const noopListen = async () => () => {};
 
 function baseDeps(overrides: Partial<QueueRunnerDeps> = {}): QueueRunnerDeps {
@@ -32,7 +45,7 @@ function baseDeps(overrides: Partial<QueueRunnerDeps> = {}): QueueRunnerDeps {
     chooseOverwrite: async () => "overwrite_all",
     removeBackground: async () => {},
     cancelInference: async () => {},
-    getSettings: () => ({ mode: "u2netp", outputDir: null }),
+    getSettings: () => ({ mode: PREFERRED_DEFAULT_MODE, outputDir: null }),
     listenProgress: noopListen,
     listenDone: noopListen,
     listenError: noopListen,
@@ -45,6 +58,7 @@ describe("startQueueProcess", () => {
     resetQueueRunnerForTests();
     queueStore.getState().clearAll();
     uiStore.getState().dismissNotice();
+    seedProcessableSettings();
   });
 
   it("processes pending items serially and marks done", async () => {

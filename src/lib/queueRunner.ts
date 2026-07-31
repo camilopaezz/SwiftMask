@@ -7,6 +7,7 @@ import {
   prodCancelDeps,
   prodStartProcessDeps,
 } from "./currentImage";
+import { isProcessableMode } from "./models";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
 import { deriveOutputPath } from "./path";
 import {
@@ -145,6 +146,10 @@ export async function startQueueProcess(
   if (isProcessBusy()) return "busy";
 
   const settings = deps.getSettings();
+  const { mode, models } = settingsStore.getState();
+  // Strict: never drain the queue on Turbo or an undownloaded quality mode.
+  if (!isProcessableMode(mode, models)) return "blocked";
+
   refreshOutputPaths(settings);
   const pendingScope = deps.pendingScope ?? "all";
 

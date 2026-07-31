@@ -13,7 +13,7 @@ This file is **why**, not a tour of the tree. Implementation lives in the code; 
 | A1 | Desktop shell | **Tauri 2 + Rust** | Small binary, native EP access via `ort`, multi-platform, low RAM. |
 | A2 | Inference embedding | **In-process `ort`** | No IPC serialization overhead; direct EP control. |
 | A3 | GPU EP strategy | **DirectML (Win) + CUDA (Linux NVIDIA) + CPU fallback; CoreML later** | One Windows binary covers NVIDIA+AMD. Linux AMD → CPU (ROCm packaging cost too high for v1). |
-| A4 | Model registry | **`u2netp`, `isnet-general-use`, `RMBG-1.4`, `birefnet-general-lite`, `RMBG-2.0`** | Turbo / Balanced / Balanced+ / High / Max Quality. BRIA models (Balanced+, Max) are CC BY-NC 4.0; High (`birefnet-lite-512` @ 512², MIT) is MIT. |
+| A4 | Model registry | **`u2netp`, `isnet-general-use`, `RMBG-1.4`, `birefnet-general-lite`, `RMBG-2.0`** | UI modes: Balanced / Balanced+ / High / Max Quality. `u2netp` is benchmark-only (hidden). BRIA models (Balanced+, Max) are CC BY-NC 4.0; High (`birefnet-lite-512` @ 512², MIT) is MIT. |
 | A5 | Feature scope (v1) | **Single image: open/drop → process → PNG alpha** | No batch queue, post-edit, video, or manual mask editor. |
 | A6 | Frontend | **React + TypeScript + Vite + Zustand** | Mature UI stack; events for long inference. |
 | A7 | Release targets (v1) | **Windows x64 (NSIS + MSI) + Linux x64 (AppImage + deb + rpm)** | macOS deferred (no device to test). |
@@ -26,7 +26,7 @@ This file is **why**, not a tour of the tree. Implementation lives in the code; 
 | A14 | Name & license | **`SwiftMask` + MIT** | Compatible with model licenses used. |
 | A15 | Image pipeline | **`image` + `imageproc`** | Enough for mask I/O and light feathering. |
 | A16 | Updates & telemetry | **Signed Tauri updater + zero telemetry** | Static `latest.json` on GitHub Releases; Ed25519 package sigs; no analytics. |
-| A17 | Bundled benchmark model | **Embed `u2netp` via `include_bytes!`** | Offline first-run benchmark + offline Turbo. |
+| A17 | Bundled benchmark model | **Embed `u2netp` via `include_bytes!`** | Offline first-run / re-run EP benchmark only (not a UI quality mode). |
 | A18 | Output filename | **`<stem>-nobg-<modelId>.png` + overwrite prompt** | Predictable; keeps inputs untouched. |
 | A19 | Theme | **Follow system via `prefers-color-scheme`** | Minimal MVP cost. |
 

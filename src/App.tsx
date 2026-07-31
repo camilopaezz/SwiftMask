@@ -18,7 +18,7 @@ import {
   formatModelsUnavailableNotice,
   formatUpdateAvailableNotice,
 } from "./lib/errorCopy";
-import { FALLBACK_DEFAULT_MODE, PREFERRED_DEFAULT_MODE } from "./lib/models";
+import { PREFERRED_DEFAULT_MODE } from "./lib/models";
 import {
   clearQueue,
   enqueueFromDrop,
@@ -152,15 +152,15 @@ function App() {
       try {
         const models = await invokeListModels();
         if (!cancelled) {
-          // Seed preferred mode before catalog reconcile so resolveMode can
-          // pick Balanced when ready, else Turbo.
+          // Seed preferred mode before catalog reconcile (strict: never Turbo).
           settingsStore.setState({ mode: PREFERRED_DEFAULT_MODE });
           settingsStore.getState().applyModels(models);
         }
       } catch (err) {
         console.error("failed to list models during init", err);
         if (!cancelled) {
-          settingsStore.setState({ mode: FALLBACK_DEFAULT_MODE, models: [] });
+          // Empty catalog — Process stays blocked until list_models works.
+          settingsStore.setState({ mode: PREFERRED_DEFAULT_MODE, models: [] });
           showAppErrorNotice(err, {
             severity: "warning",
             copy: formatModelsUnavailableNotice(),

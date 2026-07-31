@@ -27,7 +27,8 @@ const DEFAULT_CONFIG = {
   },
   models: MODEL_REGISTRY.map((m) => ({
     ...m,
-    downloaded: m.bundled,
+    // Balanced ready — Turbo is benchmark-only and hidden from the UI.
+    downloaded: m.bundled || m.id === "isnet-general-use",
   })),
 };
 
@@ -74,7 +75,8 @@ test.describe("SwiftMask", () => {
     await expect(page.getByText("Drop an image here")).toBeVisible();
 
     const inputPath = "/swiftmask/e2e/fixtures/sample.png";
-    const expectedOutputPath = "/swiftmask/e2e/output/sample-nobg-u2netp.png";
+    const expectedOutputPath =
+      "/swiftmask/e2e/output/sample-nobg-isnet-general-use.png";
 
     await page.evaluate((path) => {
       const hook = window.__swiftmaskInjectDrop;
@@ -124,7 +126,8 @@ test.describe("SwiftMask", () => {
   test("Ctrl+Enter starts process", async ({ page }) => {
     await bootAndLoadFixture(page);
 
-    const expectedOutputPath = "/swiftmask/e2e/output/sample-nobg-u2netp.png";
+    const expectedOutputPath =
+      "/swiftmask/e2e/output/sample-nobg-isnet-general-use.png";
 
     await page.keyboard.press("Control+Enter");
 
@@ -271,7 +274,7 @@ test.describe("SwiftMask", () => {
     await page.goto("/");
     await expect(page.getByText("Quality mode")).toBeVisible();
 
-    // Turbo is bundled; use Balanced (isnet) which is free and not bundled.
+    // High is free/MIT and not ready in the default mock (Balanced is pre-ready).
     await page.evaluate(() => {
       const state = window.__SWIFTMASK_MOCK__;
       if (!state) throw new Error("mock missing");
@@ -279,7 +282,7 @@ test.describe("SwiftMask", () => {
     });
 
     // Undownloaded segment click starts download (same gate as the old Download control).
-    await page.getByRole("radio", { name: "Balanced", exact: true }).click();
+    await page.getByRole("radio", { name: "High", exact: true }).click();
 
     const downloadError = page.getByTestId("download-error");
     await expect(downloadError).toBeVisible({ timeout: 10_000 });

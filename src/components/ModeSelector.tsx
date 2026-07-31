@@ -1,5 +1,10 @@
 import { formatError } from "../lib/errorCopy";
-import { isModelReady, type ModelMeta, type ModelMode } from "../lib/models";
+import {
+  isModelReady,
+  isUserFacingModel,
+  type ModelMeta,
+  type ModelMode,
+} from "../lib/models";
 import { isNonCommercialModel } from "../lib/ncLicense";
 import { isQueueRunActive } from "../lib/queueRunner";
 import { useModelDownload } from "../lib/useModelDownload";
@@ -8,9 +13,8 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { DownloadModal } from "./DownloadModal";
 import { NcLicenseModal } from "./NcLicenseModal";
 
-/** Compact labels for the segmented control (mock hybrid D). */
-const MODE_SEG_LABEL: Record<ModelMode, string> = {
-  u2netp: "Turbo",
+/** Compact labels for the segmented control (mock hybrid D). Turbo is hidden. */
+const MODE_SEG_LABEL: Partial<Record<ModelMode, string>> = {
   "isnet-general-use": "Balanced",
   "rmbg-1.4": "Bal+",
   "birefnet-general-lite": "High",
@@ -33,7 +37,10 @@ export function ModeSelector() {
   const queueRunning = useQueueStore((s) => s.running);
   const modeLocked = queueRunning || isQueueRunActive();
 
-  const selected = models.find((m) => m.id === mode) ?? models[0] ?? null;
+  // Turbo stays in the backend registry for EP benchmark only.
+  const visibleModels = models.filter(isUserFacingModel);
+  const selected =
+    visibleModels.find((m) => m.id === mode) ?? visibleModels[0] ?? null;
   const selectedReady = selected ? isModelReady(selected) : false;
   const selectedLicense = selected ? licenseLabel(selected) : null;
 
@@ -51,7 +58,7 @@ export function ModeSelector() {
       <h3 className="app-rail-section-title">Quality mode</h3>
 
       <div className="mode-seg" role="radiogroup" aria-label="Quality mode">
-        {models.map((model) => {
+        {visibleModels.map((model) => {
           const active = mode === model.id;
           const available = isModelReady(model);
           const short = MODE_SEG_LABEL[model.id as ModelMode] ?? model.name;

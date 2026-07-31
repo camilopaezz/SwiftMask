@@ -54,7 +54,7 @@ export const NC_LICENSE_MODAL_COPY = {
   summary:
     "Balanced+ and Max Quality use models under CC BY-NC 4.0. You may use outputs for personal or non-commercial work only — not for paid work, client deliverables, product photography, or other commercial purposes.",
   commercialHint:
-    "For commercial use, choose Turbo, Balanced, or High, or obtain a separate license from the model rights holder (BRIA).",
+    "For commercial use, choose Balanced or High, or obtain a separate license from the model rights holder (BRIA).",
   licenseLabel: NC_LICENSE_LABEL,
   licenseUrl: licenseUrlFor(NC_LICENSE_LABEL) ?? "",
   acceptLabel: "I understand",
