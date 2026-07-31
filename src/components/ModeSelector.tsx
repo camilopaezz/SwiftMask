@@ -8,11 +8,12 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { DownloadModal } from "./DownloadModal";
 import { NcLicenseModal } from "./NcLicenseModal";
 
-/** Compact labels for the 4-up segmented control (mock hybrid D). */
+/** Compact labels for the segmented control (mock hybrid D). */
 const MODE_SEG_LABEL: Record<ModelMode, string> = {
   u2netp: "Turbo",
   "isnet-general-use": "Balanced",
   "rmbg-1.4": "Bal+",
+  "birefnet-general-lite": "High",
   "rmbg-2.0": "Max",
 };
 

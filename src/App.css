@@ -659,8 +659,8 @@ button.titlebar-close:hover:not(:disabled) {
 
 .mode-seg {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
   padding: 5px;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -673,8 +673,8 @@ button.titlebar-close:hover:not(:disabled) {
   place-items: center;
   border: none;
   background: transparent;
-  padding: 0.68em 0.2em;
-  font-size: 0.76rem;
+  padding: 0.68em 0.12em;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--fg-muted);
   border-radius: 7px;

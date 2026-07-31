@@ -4111,7 +4111,7 @@ dependencies = [
 
 [[package]]
 name = "swiftmask"
-version = "0.9.0-beta.1"
+version = "1.0.0"
 dependencies = [
  "env_logger",
  "futures-util",
