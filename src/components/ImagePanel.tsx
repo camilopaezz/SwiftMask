@@ -10,6 +10,7 @@ import {
 import { formatError, formatRevealFailedNotice } from "../lib/errorCopy";
 import { showAppErrorNotice } from "../lib/showAppErrorNotice";
 import { type ImageItem, useImageStore } from "../stores/imageStore";
+import { useQueueStore } from "../stores/queueStore";
 import { ProgressBar } from "./ProgressBar";
 
 function statusLabel(item: ImageItem): string {
@@ -31,6 +32,8 @@ function statusLabel(item: ImageItem): string {
 
 export function ImagePanel() {
   const current = useImageStore((state) => state.current);
+  const queueActive = useQueueStore((state) => state.active);
+  const queueCount = useQueueStore((state) => state.items.length);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancellingRef = useRef(false);
@@ -41,8 +44,9 @@ export function ImagePanel() {
   const hasImage = Boolean(current);
   const isDone = current?.status === "done";
   const canShowInFolder = isDone && Boolean(current?.outputPath);
+  // CP1: batch Process not implemented — disable while queue UI is active.
   const processDisabled =
-    !hasImage || starting || cancelling || isProcessBusy();
+    queueActive || !hasImage || starting || cancelling || isProcessBusy();
 
   const handleProcess = async () => {
     if (processDisabled || !current) return;
@@ -84,13 +88,15 @@ export function ImagePanel() {
   const errorTitle = current?.error
     ? formatError(current.error.code, current.error.message).title
     : null;
-  const statusText = !current
-    ? "No image selected"
-    : isProcessing
-      ? null
-      : cancelling
-        ? "Cancelling…"
-        : `${statusLabel(current)}${errorTitle ? `: ${errorTitle}` : ""}`;
+  const statusText = queueActive
+    ? `${queueCount} in queue · batch process next`
+    : !current
+      ? "No image selected"
+      : isProcessing
+        ? null
+        : cancelling
+          ? "Cancelling…"
+          : `${statusLabel(current)}${errorTitle ? `: ${errorTitle}` : ""}`;
 
   return (
     <div className="image-panel">
@@ -118,7 +124,11 @@ export function ImagePanel() {
           <button
             type="button"
             className="btn-primary"
-            title="Process (Ctrl+Enter)"
+            title={
+              queueActive
+                ? "Batch process comes in a later step"
+                : "Process (Ctrl+Enter)"
+            }
             onClick={() => void handleProcess()}
             disabled={processDisabled}
             aria-disabled={processDisabled}

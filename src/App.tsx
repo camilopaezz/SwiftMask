@@ -7,19 +7,17 @@ import { ImagePanel } from "./components/ImagePanel";
 import { InlineSvg } from "./components/InlineSvg";
 import { ModeSelector } from "./components/ModeSelector";
 import { PreviewCanvas } from "./components/PreviewCanvas";
+import { QueueDrawer } from "./components/QueueDrawer";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TitleBar } from "./components/TitleBar";
-import {
-  acceptDrop,
-  initCurrentImageListeners,
-  syncOutputPath,
-} from "./lib/currentImage";
+import { initCurrentImageListeners, syncOutputPath } from "./lib/currentImage";
 import {
   formatFirstRunGpuDegradeNotice,
   formatModelsUnavailableNotice,
   formatUpdateAvailableNotice,
 } from "./lib/errorCopy";
 import { FALLBACK_DEFAULT_MODE, PREFERRED_DEFAULT_MODE } from "./lib/models";
+import { clearQueue, enqueueFromDrop, selectQueueItem } from "./lib/queue";
 import { showAppErrorNotice, showAppNotice } from "./lib/showAppErrorNotice";
 import {
   invokeDetectGpu,
@@ -37,6 +35,7 @@ import {
   onWindowDragMouseDown,
 } from "./lib/windowControls";
 import { useImageStore } from "./stores/imageStore";
+import { queueStore, useQueueStore } from "./stores/queueStore";
 import { settingsStore, useSettingsStore } from "./stores/settingsStore";
 import { useUiStore } from "./stores/uiStore";
 import "./App.css";
@@ -56,6 +55,9 @@ function App() {
   const aboutBackRef = useRef<HTMLButtonElement>(null);
   const aboutEntryRef = useRef<HTMLButtonElement>(null);
   const current = useImageStore((state) => state.current);
+  const queueActive = useQueueStore((state) => state.active);
+  const queueItems = useQueueStore((state) => state.items);
+  const queueSelectedId = useQueueStore((state) => state.selectedId);
   const ep = useSettingsStore((state) => state.ep);
   const mode = useSettingsStore((state) => state.mode);
   const outputDir = useSettingsStore((state) => state.outputDir);
@@ -67,6 +69,12 @@ function App() {
   const { isDragging, paths } = useTauriFileDrop();
   const lastProcessedRef = useRef<string[] | null>(null);
   const themeSyncedRef = useRef(false);
+
+  const selectedQueueItem = queueActive
+    ? (queueItems.find((i) => i.id === queueSelectedId) ??
+      queueItems[0] ??
+      null)
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -149,13 +157,50 @@ function App() {
     };
   }, []);
 
-  // Window-level drop acceptance (highlight is preview-only via isDragging).
+  // Window-level drop → queue (CP1). Highlight is preview-only via isDragging.
   useEffect(() => {
     if (!paths || paths.length === 0) return;
     if (lastProcessedRef.current === paths) return;
     lastProcessedRef.current = paths;
-    acceptDrop(paths, { mode, outputDir });
+    void enqueueFromDrop(paths, { mode, outputDir });
   }, [paths, outputDir, mode]);
+
+  // DEV computer-use helpers (not production shortcuts).
+  // Ctrl+Alt+Q inject multi-drop; Ctrl+Alt+C clear queue; Ctrl+Alt+J select next row.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey && event.altKey)) return;
+      const k = event.key.toLowerCase();
+      if (k === "q") {
+        event.preventDefault();
+        window.__swiftmaskInjectDrop?.([
+          "/tmp/swiftmask-cp1-fixtures/photo-a.png",
+          "/tmp/swiftmask-cp1-fixtures/photo-b.png",
+          "/tmp/swiftmask-cp1-fixtures/photo-c.png",
+        ]);
+        return;
+      }
+      if (k === "c") {
+        event.preventDefault();
+        clearQueue();
+        return;
+      }
+      if (k === "j") {
+        event.preventDefault();
+        const { items, selectedId } = queueStore.getState();
+        if (items.length === 0) return;
+        const idx = Math.max(
+          0,
+          items.findIndex((i) => i.id === selectedId),
+        );
+        const next = items[(idx + 1) % items.length];
+        if (next) selectQueueItem(next.id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     syncOutputPath({ mode, outputDir });
@@ -297,7 +342,12 @@ function App() {
 
   // Frameless window: always mount TitleBar so drag/close work during first-run
   // and cold-start. Blocker overlays content only (CSS leaves titlebar free).
+  const previewInputPath = queueActive
+    ? (selectedQueueItem?.inputPath ?? null)
+    : (current?.inputPath ?? null);
+  const previewOutputPath = queueActive ? null : (current?.outputPath ?? null);
   const canCompare =
+    !queueActive &&
     current?.status === "done" &&
     Boolean(current.inputPath && current.outputPath);
 
@@ -367,13 +417,17 @@ function App() {
             </div>
           </aside>
 
-          <section className="app-preview" aria-label="Preview">
+          <section
+            className={`app-preview${queueActive ? " has-queue-drawer" : ""}`}
+            aria-label="Preview"
+          >
             <PreviewCanvas
-              inputPath={current?.inputPath ?? null}
-              outputPath={current?.outputPath ?? null}
+              inputPath={previewInputPath}
+              outputPath={previewOutputPath}
               canCompare={canCompare}
               isDragging={isDragging}
             />
+            {queueActive && <QueueDrawer />}
           </section>
 
           {settingsPresence.rendered && (

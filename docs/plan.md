@@ -52,9 +52,11 @@ Easy to get wrong if you only skim the code.
 
 ---
 
-## Out of scope for v1
+## Out of scope for v1 (1.0)
 
 macOS/CoreML, ROCm, batch queue, mask threshold controls, background replacement, video, tiling for >~4K images, manual mask editor.
+
+**Batch is 1.1**, not 1.0. Locked product decisions + phased checkpoints for orchestrating agents: [`batch-1.1.md`](batch-1.1.md) (branch `t3code/batch-ingestion`).
 
 ---
 

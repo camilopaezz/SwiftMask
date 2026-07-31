@@ -38,7 +38,8 @@ export function useTauriFileDrop(): TauriFileDropState {
 
     setup();
 
-    if (import.meta.env.DEV && import.meta.env.VITE_E2E === "1") {
+    // DEV / e2e: allow programmatic drop injection (Playwright + computer-use).
+    if (import.meta.env.DEV || import.meta.env.VITE_E2E === "1") {
       window.__swiftmaskInjectDrop = (paths: string[]) => {
         setPaths(paths);
       };
