@@ -82,6 +82,7 @@ Supported input formats: **PNG, JPG, WEBP, BMP**.
 | **Turbo** | u2netp | ~4.5 MB | Apache-2.0 (bundled; always available) |
 | **Balanced** | isnet-general-use | ~178 MB | Apache-2.0 (download on first use; good default) |
 | **Balanced+** | rmbg-1.4 | ~176 MB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use) |
+| **High** | birefnet-general-lite (`birefnet-lite-512.onnx`, 512²) | ~183 MB | [MIT](https://opensource.org/licenses/MIT) (download on first use; lower VRAM than 1024 models) |
 | **Max Quality** | rmbg-2.0 | ~173 MB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use) |
 
 ![Quality mode list](docs/screenshots/02-quality-modes.png)
@@ -110,8 +111,8 @@ Default output name: `{original-stem}-nobg-{modelId}.png` next to the input (or 
 | **CUDA not used (Linux)** | Install proprietary NVIDIA drivers. The title-bar chip should read **CUDA** when active. Without drivers, CPU is used automatically. |
 | **Windows SmartScreen** | Expected for unsigned builds — *More info* → *Run anyway* if you trust the release. |
 | **Download fails** | Check network access to GitHub / Hugging Face. Incomplete files are re-downloaded and re-verified. |
-| **Out of memory on large images** | Use a smaller mode (Turbo/Balanced) or a smaller source image. GPU OOM may automatically retry on CPU when the backend can detect it. |
-| **Need a commercial workflow** | Use **Turbo** or **Balanced** (Apache-2.0 models). Do not use Balanced+ / Max Quality for commercial work unless you have a separate license from the model rights holder. |
+| **Out of memory on large images** | Prefer **Turbo** or **Balanced**; **High** runs at 512² to cut VRAM vs 1024 models. Avoid **Max Quality** on low-VRAM GPUs, or use a smaller source image. GPU OOM may automatically retry on CPU when the backend can detect it. |
+| **Need a commercial workflow** | Use **Turbo**, **Balanced**, or **High** (Apache-2.0 / MIT models). Do not use Balanced+ / Max Quality for commercial work unless you have a separate license from the model rights holder. |
 
 ## Feedback & issues
 
@@ -152,8 +153,9 @@ The ONNX **models are third-party works** with their own terms (see the table ab
 | Mode | Can end users use outputs commercially? |
 |------|----------------------------------------|
 | Turbo, Balanced | Generally yes, under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) (attribution and license notice as required by Apache) |
+| High | Generally yes, under [MIT](https://opensource.org/licenses/MIT) ([birefnet-lite-512](https://huggingface.co/studioludens/birefnet-lite-512) / BiRefNet_lite) |
 | Balanced+, Max Quality | **No** — [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) allows non-commercial use only |
 
-The **non-commercial restriction applies to people who use the RMBG models** (Balanced+ and Max Quality), not to publishing SwiftMask as free software. If you process images for paid work, client deliverables, product photography, or other commercial purposes, use **Turbo** or **Balanced**, or obtain a separate commercial license from the model rights holder ([BRIA](https://bria.ai/) for RMBG-1.4 / RMBG-2.0).
+The **non-commercial restriction applies to people who use the RMBG models** (Balanced+ and Max Quality), not to publishing SwiftMask as free software. If you process images for paid work, client deliverables, product photography, or other commercial purposes, use **Turbo**, **Balanced**, or **High**, or obtain a separate commercial license from the model rights holder ([BRIA](https://bria.ai/) for RMBG-1.4 / RMBG-2.0).
 
 This section is a plain-language summary, not legal advice.

@@ -40,14 +40,16 @@ export default defineConfig(async () => ({
     alias: getE2EAliases(),
   },
   server: {
-    port: 1420,
+    // Avoid 1331–1430: Windows reserves that range (Hyper-V/Docker) via
+    // excludedportrange, so Tauri's usual 1420 fails to bind there.
+    port: 5173,
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 1421,
+          port: 5174,
         }
       : undefined,
     watch: {
