@@ -123,7 +123,7 @@ export function ImagePanel() {
       statusText = `${queueItems.length} in queue · ${pendingCount} pending${failedCount ? ` · ${failedCount} failed` : ""}`;
     }
   } else if (!current) {
-    statusText = "No image selected";
+    statusText = "Nothing to process";
   } else if (isProcessing) {
     statusText = null;
   } else if (cancelling) {
@@ -176,7 +176,7 @@ export function ImagePanel() {
               ? "Starting…"
               : queueActive
                 ? pendingCount > 0
-                  ? `Process (${pendingCount})`
+                  ? "Process All"
                   : "Process"
                 : isDone
                   ? "Re-run"

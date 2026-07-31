@@ -1,5 +1,10 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
+import alertIcon from "../assets/icons/queue/alert.svg?raw";
+import checkIcon from "../assets/icons/queue/check.svg?raw";
+import externalLinkIcon from "../assets/icons/queue/external-link.svg?raw";
+import rotateCcwIcon from "../assets/icons/queue/rotate-ccw.svg?raw";
+import xIcon from "../assets/icons/queue/x.svg?raw";
 import { formatRevealFailedNotice } from "../lib/errorCopy";
 import { clearQueue, removeQueueItem, selectQueueItem } from "../lib/queue";
 import { showAppErrorNotice } from "../lib/showAppErrorNotice";
@@ -9,6 +14,7 @@ import {
   queueStore,
   useQueueStore,
 } from "../stores/queueStore";
+import { InlineSvg } from "./InlineSvg";
 
 async function revealPath(path: string) {
   try {
@@ -22,28 +28,29 @@ async function revealPath(path: string) {
   }
 }
 
-function statusIcon(item: QueueItem): string {
-  switch (item.status) {
-    case "processing":
-      return "●";
-    case "done":
-      return "✓";
-    case "failed":
-      return "!";
-    default:
-      return "○";
-  }
-}
-
-function rowMeta(item: QueueItem): string {
-  if (item.status === "processing") {
-    return `${item.progress}%`;
+function StatusMark({ item }: { item: QueueItem }) {
+  if (item.status === "done") {
+    return (
+      <InlineSvg svg={checkIcon} className="queue-status-icon" aria-hidden />
+    );
   }
   if (item.status === "failed") {
-    return item.error?.message ?? "failed";
+    return (
+      <InlineSvg svg={alertIcon} className="queue-status-icon" aria-hidden />
+    );
   }
-  if (item.status === "done") return "done";
-  return "queued";
+  if (item.status === "processing") {
+    return <span className="queue-status-dot" aria-hidden />;
+  }
+  // pending / queued — leave the slot empty for alignment
+  return null;
+}
+
+function rowTitle(item: QueueItem): string {
+  if (item.status === "failed" && item.error?.message) {
+    return `${item.inputPath} — ${item.error.message}`;
+  }
+  return item.inputPath;
 }
 
 export function QueueDrawer() {
@@ -215,7 +222,12 @@ export function QueueDrawer() {
         {overflowMenu}
       </div>
 
-      {drawerOpen && (
+      {/* Always mounted so open/close can animate (grid 0fr → 1fr). */}
+      <div
+        className="queue-drawer-panel"
+        aria-hidden={!drawerOpen}
+        inert={!drawerOpen ? true : undefined}
+      >
         <div className="queue-drawer-body">
           <div className="queue-list-header">
             <span className="queue-list-count">
@@ -235,21 +247,17 @@ export function QueueDrawer() {
                       type="button"
                       className="queue-row-main"
                       onClick={() => selectQueueItem(item.id)}
-                      title={item.inputPath}
+                      title={rowTitle(item)}
+                      tabIndex={drawerOpen ? 0 : -1}
                     >
                       <span
                         className={`queue-status ${item.status}`}
                         aria-hidden
                       >
-                        {statusIcon(item)}
+                        <StatusMark item={item} />
                       </span>
                       <span className="queue-name">
                         {fileNameFromPath(item.inputPath)}
-                      </span>
-                      <span
-                        className={`queue-meta${item.status === "failed" ? " error" : ""}`}
-                      >
-                        {rowMeta(item)}
                       </span>
                     </button>
                     {item.status === "failed" && (
@@ -259,11 +267,16 @@ export function QueueDrawer() {
                         title="Retry"
                         aria-label={`Retry ${fileNameFromPath(item.inputPath)}`}
                         disabled={running}
+                        tabIndex={drawerOpen ? 0 : -1}
                         onClick={() =>
                           queueStore.getState().resetToPending(item.id)
                         }
                       >
-                        ↺
+                        <InlineSvg
+                          svg={rotateCcwIcon}
+                          className="queue-row-icon"
+                          aria-hidden
+                        />
                       </button>
                     )}
                     {item.status === "done" && item.outputPath && (
@@ -272,11 +285,16 @@ export function QueueDrawer() {
                         className="queue-row-reveal btn-ghost"
                         title="Show in folder"
                         aria-label={`Show ${fileNameFromPath(item.outputPath)} in folder`}
+                        tabIndex={drawerOpen ? 0 : -1}
                         onClick={() => {
                           void revealPath(item.outputPath);
                         }}
                       >
-                        ↗
+                        <InlineSvg
+                          svg={externalLinkIcon}
+                          className="queue-row-icon"
+                          aria-hidden
+                        />
                       </button>
                     )}
                     {item.status !== "processing" && (
@@ -285,9 +303,14 @@ export function QueueDrawer() {
                         className="queue-row-remove btn-ghost"
                         title="Remove from queue"
                         aria-label={`Remove ${fileNameFromPath(item.inputPath)}`}
+                        tabIndex={drawerOpen ? 0 : -1}
                         onClick={() => removeQueueItem(item.id)}
                       >
-                        ×
+                        <InlineSvg
+                          svg={xIcon}
+                          className="queue-row-icon"
+                          aria-hidden
+                        />
                       </button>
                     )}
                   </div>
@@ -301,7 +324,7 @@ export function QueueDrawer() {
             })}
           </ul>
         </div>
-      )}
+      </div>
     </div>
   );
 }

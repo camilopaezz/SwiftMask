@@ -179,10 +179,11 @@ test.describe("SwiftMask", () => {
   test("NC license modal gates first RMBG download", async ({ page }) => {
     await page.goto("/");
 
-    const balancedPlusRow = page
-      .locator(".mode-option")
-      .filter({ hasText: "Balanced+" });
-    await balancedPlusRow.getByRole("button", { name: "Download" }).click();
+    // Hybrid rail: undownloaded segments start the download/NC gate on click.
+    const balancedPlusRadio = page.getByRole("radio", {
+      name: /Balanced\+/,
+    });
+    await balancedPlusRadio.click();
 
     const ncDialog = page.getByRole("dialog", {
       name: "Non-commercial license",
@@ -198,7 +199,7 @@ test.describe("SwiftMask", () => {
       page.getByRole("heading", { name: "Downloading Balanced+" }),
     ).toHaveCount(0);
 
-    await balancedPlusRow.getByRole("button", { name: "Download" }).click();
+    await balancedPlusRadio.click();
     await expect(ncDialog).toBeVisible();
 
     await ncDialog.getByRole("button", { name: "I understand" }).click();
@@ -271,18 +272,14 @@ test.describe("SwiftMask", () => {
     await expect(page.getByText("Quality mode")).toBeVisible();
 
     // Turbo is bundled; use Balanced (isnet) which is free and not bundled.
-    const balancedRow = page
-      .locator(".mode-option")
-      .filter({ hasText: "Balanced" })
-      .filter({ hasNotText: "Balanced+" });
-
     await page.evaluate(() => {
       const state = window.__SWIFTMASK_MOCK__;
       if (!state) throw new Error("mock missing");
       state.failNextDownload = true;
     });
 
-    await balancedRow.getByRole("button", { name: "Download" }).click();
+    // Undownloaded segment click starts download (same gate as the old Download control).
+    await page.getByRole("radio", { name: "Balanced", exact: true }).click();
 
     const downloadError = page.getByTestId("download-error");
     await expect(downloadError).toBeVisible({ timeout: 10_000 });
@@ -290,9 +287,9 @@ test.describe("SwiftMask", () => {
 
     await downloadError.getByRole("button", { name: "Retry" }).click();
     await expect(downloadError).toHaveCount(0);
-    // After success the Download chip becomes model id badge / ready.
+    // After success the detail Download control is gone (model is ready).
     await expect(
-      balancedRow.getByRole("button", { name: "Download" }),
+      page.getByTestId("mode-detail").getByRole("button", { name: "Download" }),
     ).toHaveCount(0, { timeout: 10_000 });
   });
 

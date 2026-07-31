@@ -33,38 +33,60 @@ export function FileBlock() {
     clearCurrent();
   };
 
+  let title = "No image";
+  let subtitle = "Select or open a folder";
+  let titleMuted = true;
+  let titleAttr: string | undefined;
+  let showWatch = false;
+  let watchOn = false;
+  let watchDisabled = false;
+  let emptyPrimary = true;
+  let showRemove = false;
+
   if (queueActive) {
+    emptyPrimary = false;
+    titleMuted = false;
     const n = queueItems.length;
-    const folderLabel =
-      source?.kind === "folder"
-        ? folderDisplayName(source.path)
-        : `${n} image${n === 1 ? "" : "s"} in queue`;
-    return (
-      <div className="file-block">
-        <div
-          className="file-block-name"
-          title={
-            source?.kind === "folder"
-              ? `${source.path} → ${source.outputDir}`
-              : `${n} images in queue`
-          }
-        >
-          {folderLabel}
+    if (source?.kind === "folder") {
+      title = folderDisplayName(source.path);
+      titleAttr = `${source.path} → ${source.outputDir}`;
+      showWatch = true;
+      watchOn = source.watch;
+      watchDisabled = busy && !source.watch;
+      subtitle = source.watch ? "Watching · top-level only" : "Folder session";
+    } else {
+      title = `${n} image${n === 1 ? "" : "s"} in queue`;
+      titleAttr = `${n} images in queue`;
+      subtitle = "Drop more to append";
+    }
+  } else if (current) {
+    emptyPrimary = false;
+    titleMuted = false;
+    title = fileNameFromPath(current.inputPath);
+    titleAttr = current.inputPath;
+    subtitle = "Single image";
+    showRemove = true;
+  }
+
+  return (
+    <div className="file-block">
+      <div className="file-block-source" title={titleAttr}>
+        <div className="file-block-source-text">
+          <strong className={titleMuted ? "is-muted" : undefined}>
+            {title}
+          </strong>
+          <span>{subtitle}</span>
         </div>
-        {source?.kind !== "folder" && (
-          <div className="file-block-empty" style={{ marginTop: -4 }}>
-            Drop more to append
-          </div>
-        )}
-        {source?.kind === "folder" && (
+        {showWatch && (
           <label
-            className={`watch-toggle${source.watch ? " is-on" : ""}${busy && !source.watch ? " is-disabled" : ""}`}
+            className={`watch-toggle${watchOn ? " is-on" : ""}${watchDisabled ? " is-disabled" : ""}`}
           >
             <input
               type="checkbox"
               role="switch"
-              checked={source.watch}
-              disabled={busy && !source.watch}
+              aria-checked={watchOn}
+              checked={watchOn}
+              disabled={watchDisabled}
               onChange={(e) => {
                 void setFolderWatch(e.target.checked);
               }}
@@ -72,64 +94,27 @@ export function FileBlock() {
             <span className="watch-toggle-track" aria-hidden>
               <span className="watch-toggle-thumb" />
             </span>
-            <span className="watch-toggle-label">Watch folder</span>
+            <span className="watch-toggle-label">Watch</span>
           </label>
         )}
-        <div className="file-block-actions">
+        {showRemove && (
           <button
             type="button"
-            title="Select image (Ctrl+O)"
-            onClick={() => void handleSelect()}
+            className="file-block-remove btn-ghost"
+            title="Remove image"
+            aria-label="Remove image"
+            onClick={handleRemove}
             disabled={busy}
           >
-            Select image
+            Remove
           </button>
-          <button
-            type="button"
-            title="Open folder (Ctrl+Shift+O)"
-            onClick={() => void handleOpenFolder()}
-            disabled={busy}
-          >
-            Open folder…
-          </button>
-        </div>
+        )}
       </div>
-    );
-  }
 
-  if (!current) {
-    return (
-      <div className="file-block">
-        <div className="file-block-empty">No image</div>
-        <div className="file-block-actions">
-          <button
-            type="button"
-            className="btn-primary"
-            title="Select image (Ctrl+O)"
-            onClick={() => void handleSelect()}
-          >
-            Select image
-          </button>
-          <button
-            type="button"
-            title="Open folder (Ctrl+Shift+O)"
-            onClick={() => void handleOpenFolder()}
-          >
-            Open folder…
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="file-block">
-      <div className="file-block-name" title={current.inputPath}>
-        {fileNameFromPath(current.inputPath)}
-      </div>
       <div className="file-block-actions">
         <button
           type="button"
+          className={emptyPrimary ? "btn-primary" : undefined}
           title="Select image (Ctrl+O)"
           onClick={() => void handleSelect()}
           disabled={busy}
@@ -143,14 +128,6 @@ export function FileBlock() {
           disabled={busy}
         >
           Open folder…
-        </button>
-        <button
-          type="button"
-          className="btn-danger"
-          onClick={handleRemove}
-          disabled={busy}
-        >
-          Remove
         </button>
       </div>
     </div>

@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SwiftMask — Rail hybrid C+D</title>
+  <style>
+    :root {
+      --floral-white: #fffcf2;
+      --dust-grey: #ccc5b9;
+      --charcoal-brown: #403d39;
+      --carbon-black: #252422;
+      --spicy-paprika: #eb5e28;
+
+      --bg: var(--carbon-black);
+      --bg-rail: color-mix(in srgb, var(--charcoal-brown) 70%, var(--carbon-black));
+      --bg-preview: color-mix(in srgb, #000 30%, var(--carbon-black));
+      --bg-elevated: var(--charcoal-brown);
+      --fg: var(--floral-white);
+      --fg-muted: var(--dust-grey);
+      --border: color-mix(in srgb, var(--floral-white) 14%, transparent);
+      --accent: var(--spicy-paprika);
+      --accent-hover: color-mix(in srgb, var(--floral-white) 22%, var(--spicy-paprika));
+      --accent-fg: var(--floral-white);
+      --danger: #ef4444;
+      --success: #4ade80;
+      --warn: #c9a86c;
+      --radius: 8px;
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--fg);
+      background: #121110;
+      color-scheme: dark;
+    }
+
+    html[data-theme="light"] {
+      --bg: var(--floral-white);
+      --bg-rail: color-mix(in srgb, var(--dust-grey) 35%, var(--floral-white));
+      --bg-preview: color-mix(in srgb, var(--dust-grey) 55%, var(--floral-white));
+      --bg-elevated: color-mix(in srgb, var(--floral-white) 55%, #ffffff);
+      --fg: var(--carbon-black);
+      --fg-muted: var(--charcoal-brown);
+      --border: color-mix(in srgb, var(--carbon-black) 14%, transparent);
+      --accent: var(--spicy-paprika);
+      --accent-hover: color-mix(in srgb, var(--carbon-black) 22%, var(--spicy-paprika));
+      --accent-fg: var(--floral-white);
+      --danger: #b42318;
+      --success: #15803d;
+      --warn: #8a6d3b;
+      --shadow: 0 8px 32px color-mix(in srgb, var(--carbon-black) 22%, transparent);
+      background: #e8e4db;
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      padding: 28px 24px 56px;
+      background:
+        radial-gradient(ellipse 70% 45% at 50% -8%, color-mix(in srgb, var(--accent) 12%, transparent), transparent),
+        #121110;
+    }
+    html[data-theme="light"] body {
+      background:
+        radial-gradient(ellipse 70% 45% at 50% -8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent),
+        #e8e4db;
+    }
+
+    button, input, select { font: inherit; color: inherit; }
+    button {
+      cursor: pointer;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 0.5em 0.9em;
+      background: var(--bg-elevated);
+      transition: border-color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease, transform 0.12s var(--ease-out);
+    }
+    button:hover:not(:disabled) { border-color: var(--accent); }
+    button:active:not(:disabled) { transform: scale(0.985); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.btn-primary {
+      background: var(--accent);
+      border-color: transparent;
+      color: var(--accent-fg);
+    }
+    button.btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      border-color: transparent;
+    }
+    button.btn-ghost { background: transparent; }
+    button:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      outline-offset: 1px;
+    }
+
+    .page-header {
+      max-width: 1100px;
+      margin: 0 auto 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .page-header h1 {
+      margin: 0 0 6px;
+      font-size: 1.45rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    .page-header p {
+      margin: 0;
+      color: var(--fg-muted);
+      max-width: 58ch;
+      font-size: 0.92rem;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .chip {
+      font-size: 0.72rem;
+      color: var(--fg-muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.3em 0.75em;
+      background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+    }
+
+    .stage {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    /* ── Rail ───────────────────────────────────────────── */
+    .rail-frame {
+      width: 300px;
+      height: 640px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+      background: var(--bg-rail);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .rail-frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 4%, transparent);
+    }
+
+    .rail-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 12px 6px;
+      flex-shrink: 0;
+    }
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--floral-white);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      color: var(--accent);
+    }
+    .logo-mark svg { width: 18px; height: 18px; }
+    .brand-text strong {
+      display: block;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+    .brand-text strong span { color: var(--accent); }
+    .brand-text small {
+      color: var(--fg-muted);
+      font-size: 0.7rem;
+    }
+
+    .rail-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 6px 12px 12px;
+    }
+
+    .rail-footer {
+      flex: 0 0 auto;
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: color-mix(in srgb, var(--bg-rail) 92%, #000);
+    }
+    .footer-status {
+      font-size: 0.78rem;
+      color: var(--fg-muted);
+    }
+    .process-btn {
+      width: 100%;
+      padding: 0.72em 1em;
+      font-weight: 650;
+    }
+
+    .section-title {
+      margin: 0 0 8px;
+      font-size: 0.72rem;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--fg-muted);
+    }
+
+    /* ── C: compact source ──────────────────────────────── */
+    .inline-source {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+    }
+    .inline-source .left {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .inline-source .left strong {
+      font-size: 0.92rem;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .inline-source .left span {
+      font-size: 0.72rem;
+      color: var(--fg-muted);
+    }
+
+    .watch-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--fg-muted);
+      user-select: none;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .watch-row input {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+      pointer-events: none;
+    }
+    .switch {
+      width: 34px;
+      height: 20px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--fg-muted) 35%, var(--border));
+      background: color-mix(in srgb, var(--fg) 10%, var(--bg-elevated));
+      position: relative;
+      flex-shrink: 0;
+      transition: background-color 0.16s var(--ease-out), border-color 0.16s var(--ease-out);
+    }
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--fg-muted);
+      box-shadow: 0 1px 2px rgba(0,0,0,.35);
+      transition: transform 0.16s var(--ease-out), background-color 0.16s var(--ease-out);
+    }
+    .watch-row.is-on .switch {
+      background: color-mix(in srgb, var(--accent) 78%, var(--bg-elevated));
+      border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+    }
+    .watch-row.is-on .switch::after {
+      transform: translateX(14px);
+      background: var(--floral-white);
+    }
+    .watch-row:focus-within .switch {
+      outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      outline-offset: 1px;
+    }
+
+    .mini-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .mini-actions button {
+      font-size: 0.84rem;
+      padding: 0.48em 0.55em;
+    }
+
+    /* ── D: segmented quality ───────────────────────────── */
+    .seg {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--bg) 40%, var(--bg-elevated));
+    }
+    .seg button {
+      border: none;
+      background: transparent;
+      padding: 0.55em 0.15em;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--fg-muted);
+      border-radius: 7px;
+      min-width: 0;
+    }
+    .seg button:hover:not(:disabled) {
+      color: var(--fg);
+      border-color: transparent;
+      background: color-mix(in srgb, var(--fg) 6%, transparent);
+    }
+    .seg button.active {
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-elevated));
+      color: var(--fg);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
+    }
+    .seg button:focus-visible {
+      outline-offset: 0;
+    }
+
+    .mode-detail {
+      margin-top: 8px;
+      padding: 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .mode-detail strong {
+      font-size: 0.98rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .mode-detail .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      font-size: 0.8rem;
+      color: var(--fg-muted);
+    }
+    .mode-detail .row b {
+      color: var(--accent);
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.78rem;
+    }
+    .mode-detail .row .nc {
+      color: var(--warn);
+      font-weight: 500;
+    }
+    .mode-detail .row .ok {
+      color: var(--fg-muted);
+    }
+
+    /* Preview pane mock */
+    .preview {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-preview);
+      min-height: 640px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .preview-bar {
+      height: 40px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+      color: var(--fg-muted);
+      font-size: 0.8rem;
+    }
+    .preview-body {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--fg-muted);
+      text-align: center;
+    }
+    .preview-body .box {
+      width: min(100%, 420px);
+      aspect-ratio: 4/3;
+      border-radius: 10px;
+      border: 1px dashed color-mix(in srgb, var(--fg-muted) 40%, var(--border));
+      background:
+        linear-gradient(45deg, color-mix(in srgb, var(--fg) 6%, transparent) 25%, transparent 25%),
+        linear-gradient(-45deg, color-mix(in srgb, var(--fg) 6%, transparent) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--fg) 6%, transparent) 75%),
+        linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--fg) 6%, transparent) 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+      display: grid;
+      place-items: center;
+      color: var(--fg-muted);
+      font-size: 0.88rem;
+    }
+
+    .notes {
+      max-width: 1100px;
+      margin: 28px auto 0;
+      padding: 16px 18px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+      color: var(--fg-muted);
+      font-size: 0.88rem;
+    }
+    .notes strong { color: var(--fg); }
+    .notes ul { margin: 8px 0 0; padding-left: 1.15em; }
+    .notes li { margin: 4px 0; }
+
+    .variants {
+      max-width: 1100px;
+      margin: 28px auto 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .variant-card h2 {
+      margin: 0 0 4px;
+      font-size: 0.95rem;
+      font-weight: 650;
+    }
+    .variant-card p {
+      margin: 0 0 10px;
+      font-size: 0.82rem;
+      color: var(--fg-muted);
+    }
+    .variant-card .rail-frame {
+      height: auto;
+      min-height: 0;
+    }
+    .variant-card .rail-scroll {
+      overflow: visible;
+    }
+
+    @media (max-width: 860px) {
+      .stage { grid-template-columns: 1fr; }
+      .rail-frame { width: 100%; max-width: 320px; }
+      .preview { min-height: 280px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <div>
+      <h1>Hybrid · C source + D quality</h1>
+      <p>
+        Compact source row and action pair from <strong>C</strong>, segmented quality control
+        and detail card from <strong>D</strong>. Click the segments — the detail panel updates.
+      </p>
+    </div>
+    <div class="toolbar">
+      <span class="chip">C + D hybrid</span>
+      <button type="button" class="btn-ghost" id="themeToggle">Toggle light / dark</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <aside class="rail-frame" aria-label="Left rail hybrid">
+      <div class="rail-brand">
+        <div class="logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+            <path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <strong>Swift<span>Mask</span></strong>
+          <small>background remover</small>
+        </div>
+      </div>
+
+      <div class="rail-scroll">
+        <!-- From C -->
+        <div class="inline-source">
+          <div class="left">
+            <strong id="sourceName">Pictures</strong>
+            <span id="sourceKind">Folder session</span>
+          </div>
+          <label class="watch-row" id="watchRow">
+            <input type="checkbox" role="switch" id="watchSwitch" />
+            <span class="switch" aria-hidden="true"></span>
+            Watch
+          </label>
+        </div>
+        <div class="mini-actions">
+          <button type="button">Select image</button>
+          <button type="button">Open folder…</button>
+        </div>
+
+        <!-- From D -->
+        <div>
+          <h3 class="section-title">Quality mode</h3>
+          <div class="seg" role="tablist" aria-label="Quality mode" id="modeSeg">
+            <button type="button" data-mode="turbo" role="tab">Turbo</button>
+            <button type="button" data-mode="balanced" role="tab">Balanced</button>
+            <button type="button" data-mode="balanced-plus" class="active" role="tab" aria-selected="true">Bal+</button>
+            <button type="button" data-mode="max" role="tab">Max</button>
+          </div>
+          <div class="mode-detail" id="modeDetail">
+            <strong>Balanced+</strong>
+            <div class="row"><span>Model</span><b>rmbg-1.4</b></div>
+            <div class="row"><span>License</span><span class="nc">Non-commercial</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rail-footer">
+        <div class="footer-status">16 in queue · 16 pending</div>
+        <button type="button" class="btn-primary process-btn">Process All</button>
+      </div>
+    </aside>
+
+    <section class="preview" aria-label="Preview placeholder">
+      <div class="preview-bar">
+        <span>Preview</span>
+        ·
+        <span id="previewMode">Balanced+</span>
+      </div>
+      <div class="preview-body">
+        <div class="box">
+          Queue canvas area<br/>
+          <span style="font-size:0.78rem;opacity:.8">not part of this mock</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- State variants: same hybrid, different sessions -->
+  <div class="variants">
+    <div class="variant-card">
+      <h2>Empty / single-image ready</h2>
+      <p>No source yet — primary on Select image; watch hidden.</p>
+      <div class="rail-frame">
+        <div class="rail-brand">
+          <div class="logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
+          </div>
+          <div class="brand-text">
+            <strong>Swift<span>Mask</span></strong>
+            <small>background remover</small>
+          </div>
+        </div>
+        <div class="rail-scroll">
+          <div class="inline-source">
+            <div class="left">
+              <strong style="color:var(--fg-muted);font-weight:500">No image</strong>
+              <span>Select or open a folder</span>
+            </div>
+          </div>
+          <div class="mini-actions">
+            <button type="button" class="btn-primary">Select image</button>
+            <button type="button">Open folder…</button>
+          </div>
+          <div>
+            <h3 class="section-title">Quality mode</h3>
+            <div class="seg">
+              <button type="button">Turbo</button>
+              <button type="button" class="active">Balanced</button>
+              <button type="button">Bal+</button>
+              <button type="button">Max</button>
+            </div>
+            <div class="mode-detail">
+              <strong>Balanced</strong>
+              <div class="row"><span>Model</span><b>isnet-general-use</b></div>
+              <div class="row"><span>License</span><span class="ok">Commercial OK</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="rail-footer">
+          <div class="footer-status">Nothing to process</div>
+          <button type="button" class="btn-primary process-btn" disabled>Process</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="variant-card">
+      <h2>Drop queue (no folder)</h2>
+      <p>Watch only exists for folder sources — omitted here.</p>
+      <div class="rail-frame">
+        <div class="rail-brand">
+          <div class="logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
+          </div>
+          <div class="brand-text">
+            <strong>Swift<span>Mask</span></strong>
+            <small>background remover</small>
+          </div>
+        </div>
+        <div class="rail-scroll">
+          <div class="inline-source">
+            <div class="left">
+              <strong>12 images in queue</strong>
+              <span>Drop more to append</span>
+            </div>
+          </div>
+          <div class="mini-actions">
+            <button type="button">Select image</button>
+            <button type="button">Open folder…</button>
+          </div>
+          <div>
+            <h3 class="section-title">Quality mode</h3>
+            <div class="seg">
+              <button type="button" class="active">Turbo</button>
+              <button type="button">Balanced</button>
+              <button type="button">Bal+</button>
+              <button type="button">Max</button>
+            </div>
+            <div class="mode-detail">
+              <strong>Turbo</strong>
+              <div class="row"><span>Model</span><b>u2netp</b></div>
+              <div class="row"><span>License</span><span class="ok">Commercial OK</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="rail-footer">
+          <div class="footer-status">12 in queue · 12 pending</div>
+          <button type="button" class="btn-primary process-btn">Process All</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="variant-card">
+      <h2>Watch on · mid-run</h2>
+      <p>Quality locked while running; Process becomes Cancel.</p>
+      <div class="rail-frame">
+        <div class="rail-brand">
+          <div class="logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
+          </div>
+          <div class="brand-text">
+            <strong>Swift<span>Mask</span></strong>
+            <small>background remover</small>
+          </div>
+        </div>
+        <div class="rail-scroll">
+          <div class="inline-source">
+            <div class="left">
+              <strong>Pictures</strong>
+              <span>Watching · auto-run after Process</span>
+            </div>
+            <label class="watch-row is-on">
+              <span class="switch" aria-hidden="true"></span>
+              Watch
+            </label>
+          </div>
+          <div class="mini-actions">
+            <button type="button" disabled>Select image</button>
+            <button type="button" disabled>Open folder…</button>
+          </div>
+          <div>
+            <h3 class="section-title">Quality mode</h3>
+            <div class="seg">
+              <button type="button" disabled>Turbo</button>
+              <button type="button" disabled>Balanced</button>
+              <button type="button" class="active" disabled>Bal+</button>
+              <button type="button" disabled>Max</button>
+            </div>
+            <div class="mode-detail" style="opacity:.85">
+              <strong>Balanced+</strong>
+              <div class="row"><span>Model</span><b>rmbg-1.4</b></div>
+              <div class="row"><span>License</span><span class="nc">Non-commercial</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="rail-footer">
+          <div class="footer-status">16 in queue · 4 done · 1 processing</div>
+          <button type="button" class="process-btn" style="border-color:color-mix(in srgb,var(--danger) 45%,var(--border));color:var(--danger)">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <strong>What this hybrid locks in</strong>
+    <ul>
+      <li><strong>From C:</strong> one-line source card (name + kind + Watch), two equal secondary actions under it.</li>
+      <li><strong>From D:</strong> 4-up segmented quality control + detail card (name, model id, license).</li>
+      <li><strong>Process label:</strong> queue primary is <strong>Process All</strong> (count stays in the status line, not the button).</li>
+      <li><strong>Not from D:</strong> big queue meter — footer status still carries counts.</li>
+      <li><strong>Watch:</strong> only on folder sessions; hidden for empty / drop-only queues.</li>
+      <li><strong>Empty state:</strong> Select image stays primary (btn-primary), per batch 1.1 chrome rules.</li>
+    </ul>
+  </div>
+
+  <script>
+    const MODES = {
+      turbo: {
+        label: "Turbo",
+        model: "u2netp",
+        license: "Commercial OK",
+        nc: false,
+      },
+      balanced: {
+        label: "Balanced",
+        model: "isnet-general-use",
+        license: "Commercial OK",
+        nc: false,
+      },
+      "balanced-plus": {
+        label: "Balanced+",
+        model: "rmbg-1.4",
+        license: "Non-commercial",
+        nc: true,
+      },
+      max: {
+        label: "Max Quality",
+        model: "rmbg-2.0",
+        license: "Non-commercial",
+        nc: true,
+      },
+    };
+
+    const seg = document.getElementById("modeSeg");
+    const detail = document.getElementById("modeDetail");
+    const previewMode = document.getElementById("previewMode");
+
+    function setMode(key) {
+      const m = MODES[key];
+      if (!m) return;
+      for (const btn of seg.querySelectorAll("button")) {
+        const on = btn.dataset.mode === key;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+      }
+      detail.innerHTML = `
+        <strong>${m.label}</strong>
+        <div class="row"><span>Model</span><b>${m.model}</b></div>
+        <div class="row"><span>License</span><span class="${m.nc ? "nc" : "ok"}">${m.license}</span></div>
+      `;
+      previewMode.textContent = m.label;
+    }
+
+    seg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-mode]");
+      if (!btn || btn.disabled) return;
+      setMode(btn.dataset.mode);
+    });
+
+    const watchRow = document.getElementById("watchRow");
+    const watchSwitch = document.getElementById("watchSwitch");
+    watchSwitch.addEventListener("change", () => {
+      watchRow.classList.toggle("is-on", watchSwitch.checked);
+      document.getElementById("sourceKind").textContent = watchSwitch.checked
+        ? "Watching · top-level only"
+        : "Folder session";
+    });
+
+    document.getElementById("themeToggle").addEventListener("click", () => {
+      const root = document.documentElement;
+      root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light";
+    });
+  </script>
+</body>
+</html>
