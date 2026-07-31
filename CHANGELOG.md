@@ -8,8 +8,13 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ### Added
 
+- **High** quality mode (`birefnet-general-lite`, MIT) — mid/high tier between Balanced+ and Max Quality; BiRefNet postprocess uses sigmoid then min-max
 - About & licenses panel in Settings: app/ORT versions, MIT notice, model license table, GitHub links; external links open in the system browser (including the NC license modal)
 - Release and CI publish extra installers: Linux `.deb` / `.rpm` and Windows `.msi` (alongside AppImage + NSIS)
+
+### Changed
+
+- **High** mode now uses [studioludens/birefnet-lite-512](https://huggingface.co/studioludens/birefnet-lite-512) (512×512 ONNX, ~183 MB) instead of rembg’s 1024 BiRefNet-general-lite, to reduce peak VRAM / OOM on constrained GPUs; download URL is pinned to a Hugging Face commit; legacy `birefnet-general-lite.onnx` cache files are purged on model list/download
 
 ### Fixed
 

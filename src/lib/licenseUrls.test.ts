@@ -15,8 +15,12 @@ describe("licenseUrlFor", () => {
     );
   });
 
+  it("maps MIT", () => {
+    expect(licenseUrlFor("MIT")).toBe("https://opensource.org/licenses/MIT");
+  });
+
   it("returns null for unknown licenses", () => {
-    expect(licenseUrlFor("MIT")).toBeNull();
+    expect(licenseUrlFor("BSD-3-Clause")).toBeNull();
     expect(licenseUrlFor("")).toBeNull();
     expect(licenseUrlFor("Proprietary")).toBeNull();
   });

@@ -18,9 +18,10 @@ fn is_cancelled(err: &AppError) -> bool {
 
 // ======================================================================
 // Checksum sources:
-//   isnet-general-use : MD5 fc16ebd8b0c10d971d3513d564d01e29 (rembg), SHA-256 computed locally
-//   rmbg-1.4          : SHA-256 from HuggingFace
-//   rmbg-2.0          : SHA-256 from rembg source (bria_rmbg.py)
+//   isnet-general-use      : MD5 fc16ebd8b0c10d971d3513d564d01e29 (rembg), SHA-256 computed locally
+//   rmbg-1.4               : SHA-256 from HuggingFace
+//   birefnet-general-lite  : studioludens/birefnet-lite-512 onnx/model.onnx (fp32, 512²)
+//   rmbg-2.0               : SHA-256 from rembg source (bria_rmbg.py)
 // ======================================================================
 
 pub const PLACEHOLDER_SHA256: &str =
@@ -34,6 +35,13 @@ pub const ISNET_GENERAL_USE_SHA256: &str =
 
 pub const RMBG_1_4_SHA256: &str =
     "8cafcf770b06757c4eaced21b1a88e57fd2b66de01b8045f35f01535ba742e0f";
+
+/// High mode: 512×512 ONNX re-export of ZhengPeng7/BiRefNet_lite (lower peak VRAM than 1024).
+/// Pinned HF commit (not `main`) so the download URL stays reproducible.
+pub const BIREFNET_LITE_512_HF_COMMIT: &str = "4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7";
+/// https://huggingface.co/studioludens/birefnet-lite-512/resolve/{commit}/onnx/model.onnx
+pub const BIREFNET_GENERAL_LITE_SHA256: &str =
+    "1cb0fb360dadd15af77c639085d77a9df67db0c64315560c3de005f676345ac2";
 
 pub const RMBG_2_0_SHA256: &str =
     "5b486f08200f513f460da46dd701db5fbb47d79b4be4b708a19444bcd4e79958";
@@ -118,6 +126,24 @@ fn registry() -> &'static [ModelEntry] {
                 bundled: false,
             },
             ModelEntry {
+                id: "birefnet-general-lite".into(),
+                name: "High".into(),
+                // Distinct cache name so prior rembg 1024 BiRefNet files are not reused.
+                file: "birefnet-lite-512.onnx".into(),
+                size_bytes: 191_877_254,
+                input_size: 512,
+                mean: vec![0.485, 0.456, 0.406],
+                std: vec![0.229, 0.224, 0.225],
+                license: "MIT".into(),
+                source: "studioludens/birefnet-lite-512 (ZhengPeng7/BiRefNet_lite)".into(),
+                download_url: format!(
+                    "https://huggingface.co/studioludens/birefnet-lite-512/resolve/{}/onnx/model.onnx",
+                    BIREFNET_LITE_512_HF_COMMIT
+                ),
+                sha256: BIREFNET_GENERAL_LITE_SHA256.into(),
+                bundled: false,
+            },
+            ModelEntry {
                 id: "rmbg-2.0".into(),
                 name: "Max Quality".into(),
                 file: "rmbg-2.0.onnx".into(),
@@ -177,8 +203,29 @@ pub fn model_is_cached(app: &AppHandle, model: &ModelEntry) -> Result<bool, AppE
     Ok(is_nonempty_file(&model_cache_path(app, model)?))
 }
 
+/// Filenames from earlier High-mode releases that are no longer in the registry.
+/// Best-effort delete so upgrades do not leave ~224 MB of dead rembg BiRefNet weights.
+const LEGACY_ORPHAN_MODEL_FILES: &[&str] = &[
+    "birefnet-general-lite.onnx",
+    "birefnet-general-lite.onnx.partial",
+];
+
+/// Remove known-orphaned cache files. Errors are ignored (missing is the common case).
+pub fn purge_legacy_orphan_model_files(cache_dir: &Path) {
+    for name in LEGACY_ORPHAN_MODEL_FILES {
+        let path = cache_dir.join(name);
+        if path.is_file() {
+            match std::fs::remove_file(&path) {
+                Ok(()) => log::info!("removed legacy model cache {}", path.display()),
+                Err(e) => log::warn!("could not remove legacy model cache {}: {e}", path.display()),
+            }
+        }
+    }
+}
+
 pub fn list_models(app: &AppHandle) -> Result<Vec<ModelMeta>, AppError> {
     let cache_dir = model_cache_dir(app)?;
+    purge_legacy_orphan_model_files(&cache_dir);
     Ok(static_registry()
         .iter()
         .map(|m| {
@@ -260,6 +307,8 @@ pub async fn download_model(
     let cache_dir = model_cache_dir(app)?;
     let file_path = cache_dir.join(&model.file);
     std::fs::create_dir_all(&cache_dir)?;
+    // Best-effort: reclaim disk from prior High-mode filename after model swap.
+    purge_legacy_orphan_model_files(&cache_dir);
 
     let mut last_stage = String::new();
     let mut last_pct = -1.0f32;
@@ -645,9 +694,21 @@ mod tests {
     }
 
     #[test]
-    fn registry_has_four_models() {
-        assert_eq!(registry().len(), 4);
+    fn registry_has_five_models() {
+        assert_eq!(registry().len(), 5);
         assert!(registry().iter().any(|m| m.id == "u2netp"));
+        assert!(registry().iter().any(|m| m.id == "birefnet-general-lite"));
+        let ids: Vec<&str> = registry().iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec![
+                "u2netp",
+                "isnet-general-use",
+                "rmbg-1.4",
+                "birefnet-general-lite",
+                "rmbg-2.0",
+            ]
+        );
     }
 
     #[test]
@@ -692,6 +753,47 @@ mod tests {
         assert_eq!(m.mean, vec![0.5, 0.5, 0.5]);
         assert_eq!(m.std, vec![1.0, 1.0, 1.0]);
         assert!(!is_placeholder_checksum(&m.sha256));
+    }
+
+    #[test]
+    fn birefnet_general_lite_metadata() {
+        let m = find_model("birefnet-general-lite").unwrap();
+        assert_eq!(m.name, "High");
+        assert_eq!(m.file, "birefnet-lite-512.onnx");
+        assert_eq!(m.input_size, 512);
+        assert_eq!(m.mean, vec![0.485, 0.456, 0.406]);
+        assert_eq!(m.std, vec![0.229, 0.224, 0.225]);
+        assert_eq!(m.license, "MIT");
+        assert_eq!(m.size_bytes, 191_877_254);
+        assert!(!m.bundled);
+        assert!(!is_placeholder_checksum(&m.sha256));
+        assert_eq!(m.sha256, BIREFNET_GENERAL_LITE_SHA256);
+        assert!(
+            m.download_url.contains(BIREFNET_LITE_512_HF_COMMIT),
+            "High download URL must pin HF commit, got {}",
+            m.download_url
+        );
+        assert!(!m.download_url.contains("/resolve/main/"));
+    }
+
+    #[test]
+    fn purge_legacy_orphan_model_files_removes_old_high_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        let orphan = temp.path().join("birefnet-general-lite.onnx");
+        let partial = temp.path().join("birefnet-general-lite.onnx.partial");
+        let keep = temp.path().join("birefnet-lite-512.onnx");
+        std::fs::write(&orphan, b"old").unwrap();
+        std::fs::write(&partial, b"part").unwrap();
+        std::fs::write(&keep, b"new").unwrap();
+
+        purge_legacy_orphan_model_files(temp.path());
+
+        assert!(!orphan.exists());
+        assert!(!partial.exists());
+        assert!(keep.exists());
+        // Idempotent when already gone.
+        purge_legacy_orphan_model_files(temp.path());
+        assert!(keep.exists());
     }
 
     #[test]

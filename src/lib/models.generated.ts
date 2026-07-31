@@ -3,7 +3,7 @@
 // Source of truth: src-tauri/src/models.rs
 // Regenerate: bun run gen:models
 
-export type ModelMode = "u2netp" | "isnet-general-use" | "rmbg-1.4" | "rmbg-2.0";
+export type ModelMode = "u2netp" | "isnet-general-use" | "rmbg-1.4" | "birefnet-general-lite" | "rmbg-2.0";
 
 export type ModelStaticMeta = {
   id: ModelMode;
@@ -61,6 +61,20 @@ export const MODEL_REGISTRY: readonly ModelStaticMeta[] = [
     source: "briaai/RMBG-1.4",
     download_url: "https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model.onnx",
     sha256: "8cafcf770b06757c4eaced21b1a88e57fd2b66de01b8045f35f01535ba742e0f",
+    bundled: false,
+  },
+  {
+    id: "birefnet-general-lite",
+    name: "High",
+    file: "birefnet-lite-512.onnx",
+    size_bytes: 191877254,
+    input_size: 512,
+    mean: [0.485, 0.456, 0.406],
+    std: [0.229, 0.224, 0.225],
+    license: "MIT",
+    source: "studioludens/birefnet-lite-512 (ZhengPeng7/BiRefNet_lite)",
+    download_url: "https://huggingface.co/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/onnx/model.onnx",
+    sha256: "1cb0fb360dadd15af77c639085d77a9df67db0c64315560c3de005f676345ac2",
     bundled: false,
   },
   {
