@@ -12,11 +12,12 @@ import {
   invokeDetectGpu,
   invokeGetConfig,
   invokeGetRuntimeInfo,
+  invokeClearOutputDir,
   invokePickOutputDir,
   invokeRunBenchmark,
   invokeSetEp,
 } from "../lib/tauri";
-import { isTheme } from "../lib/theme";
+import { isTheme, type Theme } from "../lib/theme";
 import {
   canCheckForUpdates,
   checkForUpdate,
@@ -45,6 +46,12 @@ type UpdateUiStatus =
   | "error"
   | "restarting";
 
+const THEME_OPTIONS: { value: Theme; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
 function formatVram(bytes: number): string {
   const gib = bytes / 1024 ** 3;
   if (gib >= 1) return `${gib.toFixed(1)} GiB`;
@@ -68,6 +75,7 @@ export function SettingsPanel({
     outputDir,
     theme,
     gpuInfo,
+    runtimeInfo,
     lastJobTimings,
     setEp: setEpInStore,
     setOutputDir,
@@ -89,8 +97,8 @@ export function SettingsPanel({
         console.error("detect_gpu failed", err);
         showAppErrorNotice(err);
       });
-    // Prefetch for About; failures stay in console only — Settings no longer
-    // shows App/ORT, and About fetches again if still missing.
+    // Prefetch for About + version card; failures stay in console only when
+    // Settings no longer depends on the value for layout.
     invokeGetRuntimeInfo()
       .then((info) => setRuntimeInfo(info))
       .catch((err: unknown) => {
@@ -125,6 +133,16 @@ export function SettingsPanel({
       }
     } catch (err) {
       console.error("pick_output_dir failed", err);
+      showAppErrorNotice(err);
+    }
+  };
+
+  const handleClearOutputDir = async () => {
+    try {
+      await invokeClearOutputDir();
+      setOutputDir(null);
+    } catch (err) {
+      console.error("clear_output_dir failed", err);
       showAppErrorNotice(err);
     }
   };
@@ -226,129 +244,239 @@ export function SettingsPanel({
     }
   };
 
-  const updateStatusHint = (() => {
+  const appVersion = runtimeInfo?.app_version;
+  const epOptions = gpuInfo?.available_eps ?? [];
+
+  const updatePill = (() => {
     switch (updateStatus) {
       case "checking":
-        return "Checking for updates…";
+        return { label: "Checking…", tone: "neutral" as const };
       case "up-to-date":
-        return "You're on the latest stable release.";
+        return { label: "Current", tone: "ok" as const };
       case "available":
-        return updateVersion
-          ? `Update ${updateVersion} is ready to install (AppImage/NSIS package).`
-          : "An update is ready to install (AppImage/NSIS package).";
+        return { label: "Ready", tone: "accent" as const };
       case "downloading":
-        return updatePercent != null
-          ? `Downloading update… ${updatePercent}%`
-          : "Downloading update…";
+        return {
+          label: updatePercent != null ? `${updatePercent}%` : "Downloading…",
+          tone: "accent" as const,
+        };
       case "restarting":
-        return "Installing and restarting…";
+        return { label: "Restarting…", tone: "accent" as const };
       case "error":
-        return "Couldn't check for updates. Try again.";
+        return { label: "Failed", tone: "warn" as const };
       default:
-        return "Stable channel only. In-app updates use AppImage (Linux) or NSIS (Windows); .deb/.rpm/MSI installs should update via those packages or reinstall.";
+        return { label: "Stable", tone: "neutral" as const };
     }
   })();
+
+  const updateCardSubLines = (() => {
+    switch (updateStatus) {
+      case "checking":
+        return ["Looking for a newer stable release…"];
+      case "up-to-date":
+        return [
+          appVersion
+            ? `You're on ${appVersion} · latest stable`
+            : "You're on the latest stable release.",
+        ];
+      case "available":
+        return [
+          "Ready to install",
+          ...(appVersion ? [`You're on ${appVersion}`] : []),
+        ];
+      case "downloading":
+        return [
+          updateVersion
+            ? `Downloading ${updateVersion}…`
+            : "Downloading update…",
+        ];
+      case "restarting":
+        return ["Installing and restarting…"];
+      case "error":
+        return ["Couldn't check for updates. Try again."];
+      default:
+        return appVersion
+          ? [`You're on ${appVersion} · stable channel`]
+          : ["Stable channel"];
+    }
+  })();
+
+  const showUpdateVersionBadge =
+    (updateStatus === "available" ||
+      updateStatus === "downloading" ||
+      updateStatus === "restarting") &&
+    Boolean(updateVersion);
+
+  const checkLabel =
+    updateStatus === "checking" ? "Checking…" : "Check for updates";
 
   return (
     <div className="settings-panel">
       <div className="settings-field">
-        <label htmlFor="settings-theme">Theme</label>
-        <select
-          id="settings-theme"
-          className="settings-select"
-          value={theme}
-          onChange={(e) => {
-            const value = e.target.value;
-            if (isTheme(value)) setTheme(value);
-          }}
-        >
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-        <div className="settings-hint">Override the system appearance</div>
-      </div>
-
-      <div className="settings-field">
-        <label htmlFor="settings-ep">Execution provider</label>
-        <select
-          id="settings-ep"
-          className="settings-select"
-          value={ep ?? ""}
-          onChange={(e) => void handleEpChange(e.target.value)}
-        >
-          <option value="" disabled>
-            Choose EP
-          </option>
-          {gpuInfo?.available_eps.map((epOption) => (
-            <option key={epOption} value={epOption}>
-              {epLabel(epOption)}
-            </option>
+        <div className="settings-field-label">Theme</div>
+        <div className="settings-seg">
+          {THEME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className="settings-seg-btn"
+              aria-pressed={theme === opt.value}
+              onClick={() => {
+                if (isTheme(opt.value)) setTheme(opt.value);
+              }}
+            >
+              {opt.label}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       <div className="settings-field">
-        <label htmlFor="settings-output-dir">Output directory</label>
-        <button
-          id="settings-output-dir"
-          type="button"
-          onClick={() => void handlePickOutputDir()}
-          title={outputDir ?? "Same as input (default)"}
-          style={{
-            textAlign: "left",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {outputDir ?? "Choose output directory"}
-        </button>
-        {!outputDir && (
-          <div className="settings-hint">Same as input (default)</div>
-        )}
-      </div>
-
-      <div className="settings-field">
-        <button
-          type="button"
-          onClick={() => void handleBenchmark()}
-          disabled={loading}
-        >
-          {loading ? "Benchmarking…" : "Re-run benchmark"}
-        </button>
-      </div>
-
-      <div className="settings-field">
-        <button
-          type="button"
-          onClick={() => void handleCheckForUpdates()}
-          disabled={!canCheckForUpdates(updateStatus)}
-        >
-          {updateStatus === "checking" ? "Checking…" : "Check for updates"}
-        </button>
-        {updateStatus === "available" && pendingUpdate && (
+        <div className="settings-field-label">Execution provider</div>
+        <div className="settings-provider-block">
+          <div className="settings-ep-chips">
+            {epOptions.length === 0 ? (
+              <span className="settings-provider-status">
+                Detecting providers…
+              </span>
+            ) : (
+              epOptions.map((epOption) => (
+                <button
+                  key={epOption}
+                  type="button"
+                  className="settings-ep-chip"
+                  aria-pressed={ep === epOption}
+                  onClick={() => void handleEpChange(epOption)}
+                >
+                  {epLabel(epOption)}
+                </button>
+              ))
+            )}
+          </div>
           <button
             type="button"
-            className="settings-update-secondary"
-            onClick={() => void handleInstallAndRestart()}
+            className="settings-mini-bench"
+            onClick={() => void handleBenchmark()}
+            disabled={loading}
+            title="Time each available EP and select the fastest"
           >
-            {updateVersion
-              ? `Install ${updateVersion} and restart`
-              : "Install and restart"}
+            <span className="settings-mini-bench-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                focusable="false"
+                aria-hidden="true"
+              >
+                <path d="M2.5 8a5.5 5.5 0 0 1 9.6-3.7M13.5 8a5.5 5.5 0 0 1-9.6 3.7" />
+                <path d="M12.5 2.5v2.8H9.7M3.5 13.5v-2.8h2.8" />
+              </svg>
+            </span>
+            {loading ? "Running…" : "Benchmark"}
           </button>
-        )}
-        {(updateStatus === "downloading" || updateStatus === "restarting") && (
-          <button type="button" className="settings-update-secondary" disabled>
-            {updateStatus === "restarting"
-              ? "Restarting…"
-              : updatePercent != null
-                ? `Downloading… ${updatePercent}%`
-                : "Downloading…"}
-          </button>
-        )}
-        <div className="settings-hint">{updateStatusHint}</div>
+        </div>
+        {loading ? (
+          <div className="settings-provider-status">Benchmarking…</div>
+        ) : null}
       </div>
+
+      <div className="settings-field">
+        <div className="settings-field-head">
+          <div className="settings-field-label">Output directory</div>
+          {outputDir ? (
+            <button
+              type="button"
+              className="settings-path-reset"
+              aria-label="Reset output directory to same as input"
+              title="Use same folder as each input file"
+              onClick={() => void handleClearOutputDir()}
+            >
+              Reset
+            </button>
+          ) : null}
+        </div>
+        <div className="settings-path-row">
+          <div
+            className="settings-path-value"
+            title={outputDir ?? "Same as input (default)"}
+          >
+            <span>{outputDir ?? "Same as input"}</span>
+          </div>
+          <button
+            type="button"
+            aria-label={
+              outputDir
+                ? `Change output directory (current: ${outputDir})`
+                : "Choose output directory"
+            }
+            onClick={() => void handlePickOutputDir()}
+          >
+            Browse…
+          </button>
+        </div>
+      </div>
+
+      {/* S2: sparse rules — prefs | system | about (footer keeps its own rule). */}
+      <hr className="settings-rule" />
+
+      <div className="settings-field">
+        <div className="settings-update-card">
+          <div className="settings-update-head">
+            <div className="settings-update-copy">
+              <div className="settings-update-title-row">
+                <div className="settings-update-title">Updates</div>
+                {showUpdateVersionBadge ? (
+                  <span className="settings-update-ver-badge">
+                    {updateVersion}
+                  </span>
+                ) : null}
+              </div>
+              <div className="settings-update-sub">
+                {updateCardSubLines.map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
+              </div>
+            </div>
+            <span className={`settings-status-pill tone-${updatePill.tone}`}>
+              <span className="settings-status-dot" aria-hidden="true" />
+              {updatePill.label}
+            </span>
+          </div>
+          <div className="settings-update-actions">
+            <button
+              type="button"
+              onClick={() => void handleCheckForUpdates()}
+              disabled={!canCheckForUpdates(updateStatus)}
+            >
+              {checkLabel}
+            </button>
+            {updateStatus === "available" && pendingUpdate && (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void handleInstallAndRestart()}
+              >
+                Install and restart
+              </button>
+            )}
+            {(updateStatus === "downloading" ||
+              updateStatus === "restarting") && (
+              <button type="button" disabled>
+                {updateStatus === "restarting"
+                  ? "Restarting…"
+                  : updatePercent != null
+                    ? `Downloading… ${updatePercent}%`
+                    : "Downloading…"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {(gpuInfo || (lastJobTimings && lastJobTimings.stages.length > 0)) && (
+        <hr className="settings-rule" />
+      )}
 
       {gpuInfo && (
         <div className="settings-meta">

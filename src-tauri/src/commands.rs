@@ -290,6 +290,15 @@ pub async fn pick_output_dir(app: AppHandle) -> Result<Option<String>, AppError>
     }
 }
 
+/// Clear custom output directory so outputs land next to each input again.
+#[tauri::command]
+pub async fn clear_output_dir(app: AppHandle) -> Result<(), AppError> {
+    let mut config = crate::config::load_config(&app)?;
+    config.output_dir = None;
+    crate::config::save_config(&app, &config)?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn get_runtime_info() -> Result<RuntimeInfo, AppError> {
     Ok(RuntimeInfo {

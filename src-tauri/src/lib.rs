@@ -31,6 +31,7 @@ pub fn run() {
             commands::cancel_inference,
             commands::path_exists,
             commands::pick_output_dir,
+            commands::clear_output_dir,
             commands::get_runtime_info,
             commands::get_config,
         ])
