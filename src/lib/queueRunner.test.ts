@@ -50,6 +50,7 @@ function baseDeps(overrides: Partial<QueueRunnerDeps> = {}): QueueRunnerDeps {
     listenProgress: noopListen,
     listenDone: noopListen,
     listenError: noopListen,
+    listenFallback: noopListen,
     ...overrides,
   };
 }

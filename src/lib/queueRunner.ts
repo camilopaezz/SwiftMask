@@ -7,6 +7,7 @@ import {
   prodCancelDeps,
   prodStartProcessDeps,
 } from "./currentImage";
+import { formatFallbackNotice } from "./errorCopy";
 import { isProcessableMode } from "./models";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
 import { deriveOutputPath } from "./path";
@@ -23,6 +24,7 @@ import {
   invokeRemoveImageBackground,
   listenInferenceDone,
   listenInferenceError,
+  listenInferenceFallback,
   listenInferenceProgress,
 } from "./tauri";
 
@@ -63,6 +65,14 @@ export type QueueRunnerDeps = {
   ) => Promise<() => void>;
   listenError?: (
     handler: (payload: { id: string; code?: string; message: string }) => void,
+  ) => Promise<() => void>;
+  listenFallback?: (
+    handler: (payload: {
+      id: string;
+      reason: string;
+      from_ep: string;
+      to_ep: string;
+    }) => void,
   ) => Promise<() => void>;
 };
 
@@ -109,7 +119,22 @@ export function resetQueueRunnerForTests(): void {
   queueStore.getState().setCancelRequested(false);
 }
 
-function showFinishNotice(succeeded: number, failed: number): void {
+function showFinishNotice(
+  succeeded: number,
+  failed: number,
+  fallback: { from_ep: string; to_ep: string } | null,
+): void {
+  // Prefer the GPU→CPU warning over a generic finish banner when any job fell back.
+  if (fallback) {
+    const copy = formatFallbackNotice(fallback.from_ep, fallback.to_ep);
+    uiStore.getState().showNotice({
+      severity: "warning",
+      title: copy.title,
+      body: `${copy.body} Queue: ${succeeded} succeeded, ${failed} failed.`,
+      code: "inference_fallback",
+    });
+    return;
+  }
   const severity = failed > 0 ? ("warning" as const) : ("info" as const);
   uiStore.getState().showNotice({
     severity,
@@ -224,6 +249,7 @@ export async function startQueueProcess(
   let succeeded = 0;
   let failed = 0;
   let wasCancelled = false;
+  let lastFallback: { from_ep: string; to_ep: string } | null = null;
 
   // Pre-mark skip_existing targets so they never remain pending.
   if (runOverwritePolicy === "skip_existing") {
@@ -323,6 +349,7 @@ export async function startQueueProcess(
       const listenProgress = deps.listenProgress ?? listenInferenceProgress;
       const listenDone = deps.listenDone ?? listenInferenceDone;
       const listenError = deps.listenError ?? listenInferenceError;
+      const listenFallback = deps.listenFallback ?? listenInferenceFallback;
       try {
         unsubs.push(
           await listenProgress((payload) => {
@@ -347,6 +374,16 @@ export async function startQueueProcess(
             if (payload.id !== jobId) return;
             terminal = "done";
             terminalOutput = payload.output_path;
+          }),
+        );
+        // Soft GPU→CPU notice; finish banner prefers this over a plain summary.
+        unsubs.push(
+          await listenFallback((payload) => {
+            if (payload.id !== jobId) return;
+            lastFallback = {
+              from_ep: payload.from_ep,
+              to_ep: payload.to_ep,
+            };
           }),
         );
         unsubs.push(
@@ -435,7 +472,7 @@ export async function startQueueProcess(
     queueStore.getState().setRunning(false);
     queueStore.getState().setCancelRequested(false);
     if (!wasCancelled) {
-      showFinishNotice(succeeded, failed);
+      showFinishNotice(succeeded, failed, lastFallback);
     }
   }
 
