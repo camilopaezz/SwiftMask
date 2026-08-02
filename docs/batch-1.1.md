@@ -471,17 +471,16 @@ All CP1–CP5 acceptance lists pass on Linux (and Windows before release). Class
 
 ---
 
-## 6. Reference mocks (design exploration)
+## 6. Design exploration (decisions locked)
 
-HTML mocks used during grilling (may expire; local copies on branch):
+Ephemeral HTML mocks used during grilling were removed after decisions landed
+(implement in React + `App.css` patterns):
 
-| File | Topic |
+| Topic | Decision |
 |------|--------|
-| `tmp-batch-open-folder-mock.html` | Open folder entry (A/B/C) — chose **C** |
-| `tmp-batch-queue-layout-mock.html` | Queue layout — chose **B collapsible** |
-| `tmp-batch-queue-clear-mock.html` | Clear/⋯ menu — chose **A** single ⋯ |
-
-These are **not** production UI; implement in React + `App.css` patterns.
+| Open folder entry (A/B/C) | **C** |
+| Queue layout | **B collapsible** |
+| Clear/⋯ menu | **A** single ⋯ |
 
 ---
 
