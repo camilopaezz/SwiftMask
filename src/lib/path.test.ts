@@ -1,5 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { deriveOutputPath } from "./path";
+import {
+  deriveFolderOutputDir,
+  deriveOutputPath,
+  normalizePathKey,
+} from "./path";
+
+describe("normalizePathKey", () => {
+  it("unifies separators and trailing slash on Windows-like paths", () => {
+    expect(normalizePathKey("C:\\Users\\a\\photo.JPG")).toBe(
+      "c:/users/a/photo.jpg",
+    );
+    expect(normalizePathKey("C:/Users/a/photo.JPG/")).toBe(
+      "c:/users/a/photo.jpg",
+    );
+  });
+
+  it("keeps Linux case sensitivity", () => {
+    expect(normalizePathKey("/tmp/Photo.PNG")).toBe("/tmp/Photo.PNG");
+    expect(normalizePathKey("/tmp/Photo.PNG/")).toBe("/tmp/Photo.PNG");
+  });
+});
+
+describe("deriveFolderOutputDir", () => {
+  it("creates sibling -nobg folder", () => {
+    expect(deriveFolderOutputDir("/home/user/Pictures/shots")).toBe(
+      "/home/user/Pictures/shots-nobg",
+    );
+  });
+
+  it("handles trailing slash", () => {
+    expect(deriveFolderOutputDir("/home/user/Pictures/shots/")).toBe(
+      "/home/user/Pictures/shots-nobg",
+    );
+  });
+});
 
 describe("deriveOutputPath", () => {
   it("places output next to input when outputDir is unset", () => {

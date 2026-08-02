@@ -150,6 +150,44 @@ export function invokePathExists(path: string): Promise<boolean> {
   return tauriInvoke("path_exists", { path });
 }
 
+export function invokePathIsDir(path: string): Promise<boolean> {
+  return tauriInvoke("path_is_dir", { path });
+}
+
+export function invokePickFolder(): Promise<string | null> {
+  return tauriInvoke("pick_folder");
+}
+
+export function invokeListFolderImages(path: string): Promise<string[]> {
+  return tauriInvoke("list_folder_images", { path });
+}
+
+export function invokeEnsureDir(path: string): Promise<void> {
+  return tauriInvoke("ensure_dir", { path });
+}
+
+export function invokeWatchFolderStart(path: string): Promise<void> {
+  return tauriInvoke("watch_folder_start", { path });
+}
+
+export function invokeWatchFolderStop(): Promise<void> {
+  return tauriInvoke("watch_folder_stop");
+}
+
+export const EVENT_FOLDER_READY = "folder:ready";
+
+export type FolderReadyPayload = {
+  path: string;
+};
+
+export function listenFolderReady(
+  handler: (payload: FolderReadyPayload) => void,
+): Promise<() => void> {
+  return tauriListen<FolderReadyPayload>(EVENT_FOLDER_READY, (event) =>
+    handler(event.payload),
+  );
+}
+
 export function listenInferenceProgress(
   handler: (payload: InferenceProgressPayload) => void,
 ): Promise<() => void> {

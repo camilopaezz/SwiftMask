@@ -39,7 +39,8 @@ export type MockState = {
 function defaultModels(): ModelMeta[] {
   return MODEL_REGISTRY.map((m) => ({
     ...m,
-    downloaded: m.bundled,
+    // Prefer Balanced ready so Process works without Turbo in the UI.
+    downloaded: m.bundled || m.id === "isnet-general-use",
   }));
 }
 

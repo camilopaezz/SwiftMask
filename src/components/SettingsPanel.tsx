@@ -7,12 +7,13 @@ import {
   formatUpdateInstallFailedCopy,
   formatUpToDateCopy,
 } from "../lib/errorCopy";
+import { isQueueRunActive } from "../lib/queueRunner";
 import { showAppErrorNotice, showAppNotice } from "../lib/showAppErrorNotice";
 import {
+  invokeClearOutputDir,
   invokeDetectGpu,
   invokeGetConfig,
   invokeGetRuntimeInfo,
-  invokeClearOutputDir,
   invokePickOutputDir,
   invokeRunBenchmark,
   invokeSetEp,
@@ -24,6 +25,7 @@ import {
   classifyUpdaterError,
   installUpdateAndRelaunch,
 } from "../lib/updater";
+import { useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
 
 export type SettingsPanelProps = {
@@ -83,6 +85,8 @@ export function SettingsPanel({
     setGpuInfo,
     setRuntimeInfo,
   } = useSettingsStore();
+  const queueRunning = useQueueStore((s) => s.running);
+  const epLocked = queueRunning || isQueueRunActive();
   const [loading, setLoading] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateUiStatus>("idle");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
@@ -116,6 +120,7 @@ export function SettingsPanel({
   }, [pendingUpdate]);
 
   const handleEpChange = async (value: string) => {
+    if (epLocked) return;
     try {
       await invokeSetEp(value);
       setEpInStore(value);
@@ -148,6 +153,7 @@ export function SettingsPanel({
   };
 
   const handleBenchmark = async () => {
+    if (epLocked) return;
     setLoading(true);
     try {
       await invokeRunBenchmark();
@@ -346,6 +352,12 @@ export function SettingsPanel({
                   type="button"
                   className="settings-ep-chip"
                   aria-pressed={ep === epOption}
+                  disabled={epLocked}
+                  title={
+                    epLocked
+                      ? "Execution provider is locked while the queue is running"
+                      : undefined
+                  }
                   onClick={() => void handleEpChange(epOption)}
                 >
                   {epLabel(epOption)}
@@ -357,8 +369,12 @@ export function SettingsPanel({
             type="button"
             className="settings-mini-bench"
             onClick={() => void handleBenchmark()}
-            disabled={loading}
-            title="Time each available EP and select the fastest"
+            disabled={loading || epLocked}
+            title={
+              epLocked
+                ? "Benchmark is locked while the queue is running"
+                : "Time each available EP and select the fastest"
+            }
           >
             <span className="settings-mini-bench-icon" aria-hidden="true">
               <svg
@@ -378,6 +394,10 @@ export function SettingsPanel({
         </div>
         {loading ? (
           <div className="settings-provider-status">Benchmarking…</div>
+        ) : epLocked ? (
+          <div className="settings-provider-status">
+            Locked while the queue is running
+          </div>
         ) : null}
       </div>
 

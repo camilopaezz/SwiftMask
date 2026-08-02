@@ -1,9 +1,9 @@
 import { useStore } from "zustand/react";
 import { createStore } from "zustand/vanilla";
 import {
-  FALLBACK_DEFAULT_MODE,
   type ModelMeta,
   type ModelMode,
+  PREFERRED_DEFAULT_MODE,
   resolveMode,
 } from "../lib/models";
 import type { GpuInfo, JobTimings, RuntimeInfo } from "../lib/tauri";
@@ -39,8 +39,8 @@ export type SettingsActions = {
 
 export const settingsStore = createStore<SettingsState & SettingsActions>(
   (set) => ({
-    // Bundled Turbo until App reconciles against list_models.
-    mode: FALLBACK_DEFAULT_MODE,
+    // Preferred quality mode until App reconciles against list_models.
+    mode: PREFERRED_DEFAULT_MODE,
     models: [],
     outputDir: null,
     ep: null,

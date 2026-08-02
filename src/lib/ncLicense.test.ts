@@ -60,6 +60,7 @@ describe("isNonCommercialModel", () => {
   it("returns false for commercial licenses", () => {
     expect(isNonCommercialModel(meta("u2netp"))).toBe(false);
     expect(isNonCommercialModel(meta("isnet-general-use"))).toBe(false);
+    expect(isNonCommercialModel(meta("birefnet-general-lite"))).toBe(false);
   });
 });
 
@@ -94,6 +95,9 @@ describe("shouldShowNcBadge", () => {
     expect(
       shouldShowNcBadge(meta("isnet-general-use", { downloaded: true })),
     ).toBe(false);
+    expect(
+      shouldShowNcBadge(meta("birefnet-general-lite", { downloaded: true })),
+    ).toBe(false);
   });
 });
 
@@ -114,6 +118,7 @@ describe("needsNcLicenseAck", () => {
 
   it("skips for commercial models", () => {
     expect(needsNcLicenseAck(meta("isnet-general-use"))).toBe(false);
+    expect(needsNcLicenseAck(meta("birefnet-general-lite"))).toBe(false);
   });
 });
 

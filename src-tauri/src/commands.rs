@@ -307,6 +307,89 @@ pub async fn get_runtime_info() -> Result<RuntimeInfo, AppError> {
     })
 }
 
+const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp"];
+
+fn is_image_filename(name: &str) -> bool {
+    let Some(dot) = name.rfind('.') else {
+        return false;
+    };
+    let ext = name[dot + 1..].to_ascii_lowercase();
+    IMAGE_EXTENSIONS.iter().any(|e| *e == ext)
+}
+
+/// Top-level image paths only (non-recursive). Hidden files skipped.
+#[tauri::command]
+pub async fn list_folder_images(path: String) -> Result<Vec<String>, AppError> {
+    let dir = PathBuf::from(&path);
+    if !dir.is_dir() {
+        return Err(AppError::Dialog(format!("not a directory: {path}")));
+    }
+    let mut out = Vec::new();
+    let read = std::fs::read_dir(&dir).map_err(|e| AppError::Dialog(e.to_string()))?;
+    for entry in read {
+        let entry = entry.map_err(|e| AppError::Dialog(e.to_string()))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| AppError::Dialog(e.to_string()))?;
+        if !file_type.is_file() {
+            continue;
+        }
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.starts_with('.') {
+            continue;
+        }
+        if !is_image_filename(&name_str) {
+            continue;
+        }
+        out.push(entry.path().to_string_lossy().into_owned());
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// Create directory (and parents) if missing. Used for `{folder}-nobg` outputs.
+#[tauri::command]
+pub async fn ensure_dir(path: String) -> Result<(), AppError> {
+    std::fs::create_dir_all(&path).map_err(|e| AppError::Dialog(e.to_string()))
+}
+
+/// True if path is an existing directory.
+#[tauri::command]
+pub async fn path_is_dir(path: String) -> bool {
+    std::path::Path::new(&path).is_dir()
+}
+
+/// Folder picker that does **not** write Settings output_dir (batch open folder).
+#[tauri::command]
+pub async fn watch_folder_start(app: AppHandle, path: String) -> Result<(), AppError> {
+    crate::folder_watch::start_watch(app, path)
+}
+
+#[tauri::command]
+pub async fn watch_folder_stop(app: AppHandle) -> Result<(), AppError> {
+    crate::folder_watch::stop_watch(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, AppError> {
+    let dialog = app.dialog().file();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    dialog.pick_folder(move |path| {
+        let _ = tx.send(path);
+    });
+    let path = rx.await.ok().flatten();
+    if let Some(path) = path {
+        let path_buf = path
+            .into_path()
+            .map_err(|e| AppError::Dialog(format!("invalid path: {}", e)))?;
+        Ok(Some(path_buf.to_string_lossy().into_owned()))
+    } else {
+        Ok(None)
+    }
+}
+
 #[tauri::command]
 pub async fn get_config(app: AppHandle) -> Result<Config, AppError> {
     crate::config::load_config(&app)

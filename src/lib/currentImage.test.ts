@@ -18,6 +18,7 @@ import {
   startProcess,
   syncOutputPath,
 } from "./currentImage";
+import { MODEL_REGISTRY, PREFERRED_DEFAULT_MODE } from "./models";
 
 const handlers: Record<string, (event: { payload: unknown }) => void> = {};
 
@@ -50,7 +51,8 @@ function makeReadyItem(
   return {
     id: overrides.id ?? "img-1",
     inputPath: overrides.inputPath ?? "/tmp/in.png",
-    outputPath: overrides.outputPath ?? "/tmp/in-nobg-u2netp.png",
+    outputPath:
+      overrides.outputPath ?? `/tmp/in-nobg-${PREFERRED_DEFAULT_MODE}.png`,
     status: "ready" as const,
     progress: 0,
     stage: null,
@@ -63,9 +65,20 @@ function makeDeps(overrides: Partial<StartProcessDeps> = {}): StartProcessDeps {
     exists: vi.fn().mockResolvedValue(false),
     ask: vi.fn().mockResolvedValue(true),
     removeBackground: vi.fn().mockResolvedValue(undefined),
-    getSettings: () => ({ mode: "u2netp", outputDir: null }),
+    getSettings: () => ({ mode: PREFERRED_DEFAULT_MODE, outputDir: null }),
     ...overrides,
   };
+}
+
+/** Strict Process gate reads settingsStore — seed a ready user-facing mode. */
+function seedProcessableSettings() {
+  settingsStore.setState({
+    mode: PREFERRED_DEFAULT_MODE,
+    models: MODEL_REGISTRY.map((m) => ({
+      ...m,
+      downloaded: m.bundled || m.id === PREFERRED_DEFAULT_MODE,
+    })),
+  });
 }
 
 describe("currentImage", () => {
@@ -73,6 +86,7 @@ describe("currentImage", () => {
     resetProcessGateForTests();
     imageStore.setState({ current: null });
     settingsStore.getState().setLastJobTimings(null);
+    seedProcessableSettings();
     for (const key of Object.keys(handlers)) {
       delete handlers[key];
     }

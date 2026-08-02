@@ -1,3 +1,6 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { exit } from "@tauri-apps/plugin-process";
 import { useEffect, useRef, useState } from "react";
 import appLogoSvg from "./assets/app-logo.svg?raw";
 import { AboutPanel } from "./components/AboutPanel";
@@ -7,19 +10,23 @@ import { ImagePanel } from "./components/ImagePanel";
 import { InlineSvg } from "./components/InlineSvg";
 import { ModeSelector } from "./components/ModeSelector";
 import { PreviewCanvas } from "./components/PreviewCanvas";
+import { QueueDrawer } from "./components/QueueDrawer";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TitleBar } from "./components/TitleBar";
-import {
-  acceptDrop,
-  initCurrentImageListeners,
-  syncOutputPath,
-} from "./lib/currentImage";
+import { initCurrentImageListeners, syncOutputPath } from "./lib/currentImage";
 import {
   formatFirstRunGpuDegradeNotice,
   formatModelsUnavailableNotice,
   formatUpdateAvailableNotice,
 } from "./lib/errorCopy";
-import { FALLBACK_DEFAULT_MODE, PREFERRED_DEFAULT_MODE } from "./lib/models";
+import { PREFERRED_DEFAULT_MODE } from "./lib/models";
+import {
+  clearQueue,
+  enqueueFromDrop,
+  openFolderAsQueue,
+  selectQueueItem,
+} from "./lib/queue";
+import { cancelQueueProcess, isQueueRunActive } from "./lib/queueRunner";
 import { showAppErrorNotice, showAppNotice } from "./lib/showAppErrorNotice";
 import {
   invokeDetectGpu,
@@ -37,6 +44,11 @@ import {
   onWindowDragMouseDown,
 } from "./lib/windowControls";
 import { useImageStore } from "./stores/imageStore";
+import {
+  queueStore,
+  resolveQueuePreviewId,
+  useQueueStore,
+} from "./stores/queueStore";
 import { settingsStore, useSettingsStore } from "./stores/settingsStore";
 import { useUiStore } from "./stores/uiStore";
 import "./App.css";
@@ -47,8 +59,8 @@ function App() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsView, setSettingsView] =
     useState<SettingsShellView>("settings");
-  // Match --duration-fast (150ms) on .modal-backdrop / .modal-card.
-  const settingsPresence = useAnimatedPresence(settingsVisible, 150);
+  // Match --duration-normal (220ms) on .modal-backdrop / .modal-card.
+  const settingsPresence = useAnimatedPresence(settingsVisible);
   const [ready, setReady] = useState(false);
   const [firstRun, setFirstRun] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -56,6 +68,11 @@ function App() {
   const aboutBackRef = useRef<HTMLButtonElement>(null);
   const aboutEntryRef = useRef<HTMLButtonElement>(null);
   const current = useImageStore((state) => state.current);
+  const queueActive = useQueueStore((state) => state.active);
+  const queueItems = useQueueStore((state) => state.items);
+  const queueSelectedId = useQueueStore((state) => state.selectedId);
+  const queuePinnedId = useQueueStore((state) => state.pinnedId);
+  const queueRunning = useQueueStore((state) => state.running);
   const ep = useSettingsStore((state) => state.ep);
   const mode = useSettingsStore((state) => state.mode);
   const outputDir = useSettingsStore((state) => state.outputDir);
@@ -67,6 +84,23 @@ function App() {
   const { isDragging, paths } = useTauriFileDrop();
   const lastProcessedRef = useRef<string[] | null>(null);
   const themeSyncedRef = useRef(false);
+
+  const selectedQueueItem = queueActive
+    ? (() => {
+        const id = resolveQueuePreviewId({
+          active: queueActive,
+          items: queueItems,
+          selectedId: queueSelectedId,
+          pinnedId: queuePinnedId,
+          source: null,
+          drawerOpen: true,
+          drawerTouched: false,
+          running: queueRunning,
+          cancelRequested: false,
+        });
+        return queueItems.find((i) => i.id === id) ?? queueItems[0] ?? null;
+      })()
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -119,15 +153,15 @@ function App() {
       try {
         const models = await invokeListModels();
         if (!cancelled) {
-          // Seed preferred mode before catalog reconcile so resolveMode can
-          // pick Balanced when ready, else Turbo.
+          // Seed preferred mode before catalog reconcile (strict: never Turbo).
           settingsStore.setState({ mode: PREFERRED_DEFAULT_MODE });
           settingsStore.getState().applyModels(models);
         }
       } catch (err) {
         console.error("failed to list models during init", err);
         if (!cancelled) {
-          settingsStore.setState({ mode: FALLBACK_DEFAULT_MODE, models: [] });
+          // Empty catalog — Process stays blocked until list_models works.
+          settingsStore.setState({ mode: PREFERRED_DEFAULT_MODE, models: [] });
           showAppErrorNotice(err, {
             severity: "warning",
             copy: formatModelsUnavailableNotice(),
@@ -149,13 +183,59 @@ function App() {
     };
   }, []);
 
-  // Window-level drop acceptance (highlight is preview-only via isDragging).
+  // Window-level drop → queue. Highlight is preview-only via isDragging.
   useEffect(() => {
     if (!paths || paths.length === 0) return;
     if (lastProcessedRef.current === paths) return;
     lastProcessedRef.current = paths;
-    acceptDrop(paths, { mode, outputDir });
+    void enqueueFromDrop(paths, { mode, outputDir });
   }, [paths, outputDir, mode]);
+
+  // DEV computer-use helpers (not production shortcuts).
+  // Ctrl+Alt+Q multi-drop; F open folder fixture; C clear; J next row.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey && event.altKey)) return;
+      const k = event.key.toLowerCase();
+      if (k === "q") {
+        event.preventDefault();
+        window.__swiftmaskInjectDrop?.([
+          "/tmp/swiftmask-cp1-fixtures/photo-a.png",
+          "/tmp/swiftmask-cp1-fixtures/photo-b.png",
+          "/tmp/swiftmask-cp1-fixtures/photo-c.png",
+        ]);
+        return;
+      }
+      if (k === "f") {
+        event.preventDefault();
+        const { mode: m, outputDir: o } = settingsStore.getState();
+        void openFolderAsQueue("/tmp/swiftmask-cp4-folder", {
+          mode: m,
+          outputDir: o,
+        });
+        return;
+      }
+      if (k === "c") {
+        event.preventDefault();
+        void clearQueue();
+        return;
+      }
+      if (k === "j") {
+        event.preventDefault();
+        const { items, selectedId } = queueStore.getState();
+        if (items.length === 0) return;
+        const idx = Math.max(
+          0,
+          items.findIndex((i) => i.id === selectedId),
+        );
+        const next = items[(idx + 1) % items.length];
+        if (next) selectQueueItem(next.id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     syncOutputPath({ mode, outputDir });
@@ -283,6 +363,86 @@ function App() {
     };
   }, [settingsPresence.open, settingsView]);
 
+  // Confirm quit when the queue still has work (running/pending).
+  // Note: preventDefault must run before any await, or the close is already gone.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    const queueHasLiveWork = () => {
+      const q = queueStore.getState();
+      return (
+        q.running ||
+        isQueueRunActive() ||
+        q.items.some((i) => i.status === "pending" || i.status === "processing")
+      );
+    };
+
+    const forceQuit = async () => {
+      const win = getCurrentWindow();
+      try {
+        await win.destroy();
+        return;
+      } catch (err) {
+        console.error("window destroy failed", err);
+      }
+      // Last resort — process:default includes allow-exit.
+      try {
+        await exit(0);
+      } catch (err) {
+        console.error("process exit failed", err);
+      }
+    };
+
+    const setup = async () => {
+      try {
+        const win = getCurrentWindow();
+        unlisten = await win.onCloseRequested(async (event) => {
+          if (!queueHasLiveWork()) {
+            // Idle: allow the default close path (win.close / titlebar ×).
+            return;
+          }
+
+          // Async confirm — hold the close until the user decides.
+          event.preventDefault();
+          const ok = await ask(
+            "Queue has unfinished work. Cancel the queue and quit?",
+            { title: "Quit SwiftMask", kind: "warning" },
+          );
+          if (!ok) return;
+
+          try {
+            if (isQueueRunActive() || queueStore.getState().running) {
+              await cancelQueueProcess();
+            }
+          } catch (err) {
+            console.error("cancel queue on quit failed", err);
+          }
+          // destroy (not close) so we don't re-enter this handler.
+          await forceQuit();
+        });
+      } catch (err) {
+        // Web / non-Tauri: weak beforeunload fallback only.
+        if (cancelled) return;
+        console.debug("onCloseRequested unavailable", err);
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+          if (!queueHasLiveWork()) return;
+          e.preventDefault();
+          e.returnValue = "";
+        };
+        window.addEventListener("beforeunload", onBeforeUnload);
+        unlisten = () =>
+          window.removeEventListener("beforeunload", onBeforeUnload);
+      }
+    };
+
+    void setup();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
   const openAbout = () => {
     setSettingsView("about");
   };
@@ -297,9 +457,19 @@ function App() {
 
   // Frameless window: always mount TitleBar so drag/close work during first-run
   // and cold-start. Blocker overlays content only (CSS leaves titlebar free).
-  const canCompare =
-    current?.status === "done" &&
-    Boolean(current.inputPath && current.outputPath);
+  const previewInputPath = queueActive
+    ? (selectedQueueItem?.inputPath ?? null)
+    : (current?.inputPath ?? null);
+  const previewOutputPath = queueActive
+    ? selectedQueueItem?.status === "done" && selectedQueueItem.outputPath
+      ? selectedQueueItem.outputPath
+      : null
+    : (current?.outputPath ?? null);
+  const canCompare = queueActive
+    ? selectedQueueItem?.status === "done" &&
+      Boolean(selectedQueueItem.inputPath && selectedQueueItem.outputPath)
+    : current?.status === "done" &&
+      Boolean(current.inputPath && current.outputPath);
 
   return (
     <div className={`app-shell${notice ? " has-notice" : ""}`}>
@@ -367,13 +537,17 @@ function App() {
             </div>
           </aside>
 
-          <section className="app-preview" aria-label="Preview">
+          <section
+            className={`app-preview${queueActive ? " has-queue-drawer" : ""}`}
+            aria-label="Preview"
+          >
             <PreviewCanvas
-              inputPath={current?.inputPath ?? null}
-              outputPath={current?.outputPath ?? null}
+              inputPath={previewInputPath}
+              outputPath={previewOutputPath}
               canCompare={canCompare}
               isDragging={isDragging}
             />
+            {queueActive && <QueueDrawer />}
           </section>
 
           {settingsPresence.rendered && (
