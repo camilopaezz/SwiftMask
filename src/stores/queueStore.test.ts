@@ -25,14 +25,16 @@ describe("queueStore FIFO seq", () => {
 
   it("assigns ascending seq on activate and preserves pending order (not path alpha)", () => {
     // Paths would sort z before a alphabetically — seq must win.
-    queueStore.getState().activateWithItems(
-      [
-        makeItem({ id: "z", inputPath: "/tmp/z.png" }),
-        makeItem({ id: "a", inputPath: "/tmp/a.png" }),
-        makeItem({ id: "m", inputPath: "/tmp/m.png" }),
-      ],
-      { kind: "drop" },
-    );
+    queueStore
+      .getState()
+      .activateWithItems(
+        [
+          makeItem({ id: "z", inputPath: "/tmp/z.png" }),
+          makeItem({ id: "a", inputPath: "/tmp/a.png" }),
+          makeItem({ id: "m", inputPath: "/tmp/m.png" }),
+        ],
+        { kind: "drop" },
+      );
 
     const pending = queueStore
       .getState()
@@ -42,17 +44,21 @@ describe("queueStore FIFO seq", () => {
   });
 
   it("appends with seq after max existing so process order stays FIFO", () => {
-    queueStore.getState().activateWithItems(
-      [
-        makeItem({ id: "first", inputPath: "/tmp/zzz-first.png" }),
-        makeItem({ id: "second", inputPath: "/tmp/aaa-second.png" }),
-      ],
-      { kind: "drop" },
-    );
+    queueStore
+      .getState()
+      .activateWithItems(
+        [
+          makeItem({ id: "first", inputPath: "/tmp/zzz-first.png" }),
+          makeItem({ id: "second", inputPath: "/tmp/aaa-second.png" }),
+        ],
+        { kind: "drop" },
+      );
 
-    queueStore.getState().appendItems([
-      makeItem({ id: "third", inputPath: "/tmp/mmm-third.png" }),
-    ]);
+    queueStore
+      .getState()
+      .appendItems([
+        makeItem({ id: "third", inputPath: "/tmp/mmm-third.png" }),
+      ]);
 
     const pending = queueStore
       .getState()
@@ -62,13 +68,15 @@ describe("queueStore FIFO seq", () => {
   });
 
   it("keeps processing first then pending by seq in display sort", () => {
-    queueStore.getState().activateWithItems(
-      [
-        makeItem({ id: "p1", inputPath: "/tmp/z.png" }),
-        makeItem({ id: "p2", inputPath: "/tmp/a.png" }),
-      ],
-      { kind: "drop" },
-    );
+    queueStore
+      .getState()
+      .activateWithItems(
+        [
+          makeItem({ id: "p1", inputPath: "/tmp/z.png" }),
+          makeItem({ id: "p2", inputPath: "/tmp/a.png" }),
+        ],
+        { kind: "drop" },
+      );
     queueStore.getState().patchItem("p2", { status: "processing" });
 
     const ids = queueStore.getState().items.map((i) => i.id);
@@ -77,13 +85,12 @@ describe("queueStore FIFO seq", () => {
   });
 
   it("resolveQueuePreviewId prefers processing over selection", () => {
-    queueStore.getState().activateWithItems(
-      [
-        makeItem({ id: "a" }),
-        makeItem({ id: "b", status: "processing" }),
-      ],
-      { kind: "drop" },
-    );
+    queueStore
+      .getState()
+      .activateWithItems(
+        [makeItem({ id: "a" }), makeItem({ id: "b", status: "processing" })],
+        { kind: "drop" },
+      );
     queueStore.getState().select("a");
     // select pins — pin to a; processing still wins when pin cleared
     queueStore.getState().pin(null);

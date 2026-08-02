@@ -233,8 +233,9 @@ export async function enqueueFromDrop(
     return "rejected";
   }
 
-  if (dirs.length === 1) {
-    const result = await openFolderAsQueue(dirs[0]!, settings, {
+  const singleDir = dirs.length === 1 ? dirs[0] : undefined;
+  if (singleDir !== undefined) {
+    const result = await openFolderAsQueue(singleDir, settings, {
       askConfirm: deps.askConfirm,
     });
     if (result === "enqueued") return "enqueued";
