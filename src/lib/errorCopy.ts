@@ -126,11 +126,11 @@ export function formatFirstRunGpuDegradeNotice(): ErrorCopy {
   };
 }
 
-/** First-run / catalog list_models soft-degrade (force bundled Turbo). */
+/** First-run / catalog list_models soft-degrade (Process stays blocked). */
 export function formatModelsUnavailableNotice(): ErrorCopy {
   return {
     title: "Couldn't load model list",
-    body: "Using Turbo (bundled). Try restarting the app.",
+    body: "Download a quality mode after the list loads. Try restarting the app.",
   };
 }
 

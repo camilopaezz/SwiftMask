@@ -78,9 +78,17 @@ export function invoke<T>(
       return (activeInference ?? Promise.resolve()) as Promise<T>;
     case "path_exists":
       return Promise.resolve(false as T);
+    case "path_is_dir": {
+      // Fixture paths are files; treat bare paths without a trailing separator
+      // as files so multi-drop enqueue works in mocked e2e.
+      const path = String(args?.path ?? "");
+      return Promise.resolve(
+        (path.endsWith("/") || path.endsWith("\\")) as T,
+      );
+    }
     case "get_runtime_info":
       return Promise.resolve({
-        app_version: "0.1.0",
+        app_version: "1.0.0",
         ort_version: "1.24",
       } as T);
     default:

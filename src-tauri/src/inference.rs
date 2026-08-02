@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 
 use ndarray::Array4;
 use ort::ep::ExecutionProviderDispatch;
@@ -13,11 +14,17 @@ pub const EP_CPU: &str = "cpu";
 pub const EP_DIRECTML: &str = "directml";
 pub const EP_CUDA: &str = "cuda";
 
+/// Drop warm sessions if unused for this long.
+const SESSION_IDLE_TTL: Duration = Duration::from_secs(120);
+
 pub static U2NETP_MODEL_BYTES: &[u8] = include_bytes!("../models/u2netp.onnx");
 
-/// Short-lived holders for in-flight loads / concurrent use. Successful and failed
-/// `with_session` calls both remove their entry so idle processes do not retain models.
+/// Cached ORT sessions keyed by (model_id, ep). Kept warm across successful jobs
+/// for batch throughput; dropped on OOM, non-OOM error, EP change, or idle TTL.
 static SESSION_CACHE: Mutex<Option<HashMap<(String, String), Session>>> = Mutex::new(None);
+
+/// Last successful use of any cached session (for idle TTL).
+static SESSION_LAST_USE: Mutex<Option<Instant>> = Mutex::new(None);
 
 static DETECTED_VRAM: LazyLock<Option<u64>> = LazyLock::new(|| {
     crate::gpu::detect_gpu().ok().and_then(|g| g.vram_bytes)
@@ -99,7 +106,33 @@ fn release_all_sessions() {
     // Drop sessions first (frees ORT/DirectML device resources), then trim WS.
     let stolen = take_session_cache();
     drop(stolen);
+    if let Ok(mut last) = SESSION_LAST_USE.lock() {
+        *last = None;
+    }
     trim_process_working_set();
+}
+
+/// If the warm cache has been idle longer than [`SESSION_IDLE_TTL`], drop it.
+fn maybe_expire_idle_sessions() {
+    let expired = {
+        let last = SESSION_LAST_USE.lock().unwrap_or_else(|e| e.into_inner());
+        match *last {
+            Some(t) => t.elapsed() > SESSION_IDLE_TTL,
+            None => false,
+        }
+    };
+    if expired {
+        log::info!(
+            "ORT session idle > {}s; releasing warm cache",
+            SESSION_IDLE_TTL.as_secs()
+        );
+        release_all_sessions();
+    }
+}
+
+fn touch_session_last_use() {
+    let mut last = SESSION_LAST_USE.lock().unwrap_or_else(|e| e.into_inner());
+    *last = Some(Instant::now());
 }
 
 /// Ask Windows to page out free RAM so Task Manager reflects the drop.
@@ -179,6 +212,9 @@ where
     F: FnOnce(&mut Session) -> Result<R, AppError>,
     L: FnMut() -> Result<Vec<u8>, AppError>,
 {
+    // Batch 1.1: keep sessions warm across serial jobs; expire after idle TTL.
+    maybe_expire_idle_sessions();
+
     let key = (model_id.to_string(), ep.to_string());
     ensure_session_loaded(&key, &mut load_bytes)?;
 
@@ -195,7 +231,7 @@ where
         guard = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
     }
 
-    // End the &mut Session borrow before we steal from the map.
+    // End the &mut Session borrow before we mutate the map on error paths.
     let result = {
         let cache = guard.get_or_insert_with(HashMap::new);
         match cache.get_mut(&key) {
@@ -206,25 +242,26 @@ where
         }
     };
 
-    // Always release after the closure returns so a finished generation does not
-    // pin multi-GB DirectML/ORT resources until EP switch / process exit.
-    // Steal *before* unlock so no concurrent caller reuses a doomed session;
-    // Drop runs after unlock so teardown does not block the cache mutex.
-    // Batch (roadmap): process many images inside one `with_session` closure so
-    // the session stays loaded for the whole batch, then drops once at the end.
+    // Keep warm on success (batch serial jobs re-enter with_session per image).
+    // Drop on OOM (all keys) or other errors (this key) so bad sessions are not reused.
     match &result {
+        Ok(_) => {
+            drop(guard);
+            touch_session_last_use();
+        }
         Err(err) if is_likely_oom(err) => {
             log::warn!(
                 "OOM-like inference error; destroying all cached sessions to free GPU/system memory: {err}"
             );
             let all = guard.take();
             drop(guard);
+            if let Ok(mut last) = SESSION_LAST_USE.lock() {
+                *last = None;
+            }
             discard_sessions_and_trim(all);
         }
-        other => {
-            if let Err(err) = other {
-                log::warn!("inference failed; dropping cached session {key:?}: {err}");
-            }
+        Err(err) => {
+            log::warn!("inference failed; dropping cached session {key:?}: {err}");
             let one = take_cached_session(&mut guard, &key);
             drop(guard);
             discard_sessions_and_trim(one);
@@ -403,7 +440,8 @@ mod tests {
     }
 
     #[test]
-    fn successful_run_drops_cached_session() {
+    fn successful_runs_keep_warm_session() {
+        // Serial with_session calls reuse the loaded session.
         let _lock = lock_session_cache_for_test();
         let _ = invalidate_all_sessions();
         let mut loads = 0usize;
@@ -420,7 +458,6 @@ mod tests {
         .unwrap();
         assert_eq!(loads, 1);
 
-        // Success path must release the session so the next generation reloads.
         with_session(
             "u2netp",
             EP_CPU,
@@ -431,13 +468,11 @@ mod tests {
             |session| Ok(session.inputs().len()),
         )
         .unwrap();
-        assert_eq!(loads, 2);
+        assert_eq!(loads, 1, "warm session must not reload on success");
     }
 
     #[test]
     fn multi_run_inside_one_with_session_loads_once() {
-        // Batch roadmap: keep the session for many images by looping inside the
-        // closure; load_bytes runs once, then session drops when the closure ends.
         let _lock = lock_session_cache_for_test();
         let _ = invalidate_all_sessions();
         let mut loads = 0usize;

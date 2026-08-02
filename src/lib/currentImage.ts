@@ -3,6 +3,7 @@ import { type ImageItem, imageStore } from "../stores/imageStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
 import { formatFallbackNotice } from "./errorCopy";
+import { isProcessableMode } from "./models";
 import { shouldProceedWithOverwrite } from "./overwrite";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
 import { deriveOutputPath } from "./path";
@@ -187,6 +188,10 @@ export async function startProcess(
   const current = imageStore.getState().current;
   if (!current) return "no-image";
   if (isProcessBusy()) return "already-processing";
+
+  // Strict: Turbo / undownloaded modes never start a job (UI also gates Process).
+  const { mode, models } = settingsStore.getState();
+  if (!isProcessableMode(mode, models)) return "skipped";
 
   processGate = true;
   const startedId = current.id;

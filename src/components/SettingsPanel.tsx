@@ -7,6 +7,7 @@ import {
   formatUpdateInstallFailedCopy,
   formatUpToDateCopy,
 } from "../lib/errorCopy";
+import { isQueueRunActive } from "../lib/queueRunner";
 import { showAppErrorNotice, showAppNotice } from "../lib/showAppErrorNotice";
 import {
   invokeDetectGpu,
@@ -23,6 +24,7 @@ import {
   classifyUpdaterError,
   installUpdateAndRelaunch,
 } from "../lib/updater";
+import { useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
 
 export type SettingsPanelProps = {
@@ -75,6 +77,8 @@ export function SettingsPanel({
     setGpuInfo,
     setRuntimeInfo,
   } = useSettingsStore();
+  const queueRunning = useQueueStore((s) => s.running);
+  const epLocked = queueRunning || isQueueRunActive();
   const [loading, setLoading] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateUiStatus>("idle");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
@@ -108,6 +112,7 @@ export function SettingsPanel({
   }, [pendingUpdate]);
 
   const handleEpChange = async (value: string) => {
+    if (epLocked) return;
     try {
       await invokeSetEp(value);
       setEpInStore(value);
@@ -275,6 +280,12 @@ export function SettingsPanel({
           id="settings-ep"
           className="settings-select"
           value={ep ?? ""}
+          disabled={epLocked}
+          title={
+            epLocked
+              ? "Execution provider is locked while the queue is running"
+              : undefined
+          }
           onChange={(e) => void handleEpChange(e.target.value)}
         >
           <option value="" disabled>
@@ -286,6 +297,9 @@ export function SettingsPanel({
             </option>
           ))}
         </select>
+        {epLocked && (
+          <div className="settings-hint">Locked while the queue is running</div>
+        )}
       </div>
 
       <div className="settings-field">
@@ -313,7 +327,12 @@ export function SettingsPanel({
         <button
           type="button"
           onClick={() => void handleBenchmark()}
-          disabled={loading}
+          disabled={loading || epLocked}
+          title={
+            epLocked
+              ? "Benchmark is locked while the queue is running"
+              : undefined
+          }
         >
           {loading ? "Benchmarking…" : "Re-run benchmark"}
         </button>

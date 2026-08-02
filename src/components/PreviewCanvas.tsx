@@ -194,9 +194,14 @@ export function PreviewCanvas({
       <div className={`preview-canvas${isDragging ? " is-dragging" : ""}`}>
         <div className="preview-empty">
           <p className="preview-empty-title">
-            {isDragging ? "Drop image here" : "Drop an image here"}
+            {isDragging
+              ? "Drop images or a folder"
+              : "Drop images or a folder to start a queue"}
           </p>
           <p className="preview-empty-formats">PNG, JPG, WEBP, BMP</p>
+          <p className="preview-empty-hint">
+            Select image · Ctrl+O · Open folder · Ctrl+Shift+O
+          </p>
         </div>
       </div>
     );
