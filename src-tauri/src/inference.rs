@@ -14,7 +14,7 @@ pub const EP_CPU: &str = "cpu";
 pub const EP_DIRECTML: &str = "directml";
 pub const EP_CUDA: &str = "cuda";
 
-/// Drop warm sessions if unused for this long (batch 1.1 CP3 keep-alive).
+/// Drop warm sessions if unused for this long.
 const SESSION_IDLE_TTL: Duration = Duration::from_secs(120);
 
 pub static U2NETP_MODEL_BYTES: &[u8] = include_bytes!("../models/u2netp.onnx");
@@ -441,7 +441,7 @@ mod tests {
 
     #[test]
     fn successful_runs_keep_warm_session() {
-        // Batch 1.1 CP3: serial with_session calls reuse the loaded session.
+        // Serial with_session calls reuse the loaded session.
         let _lock = lock_session_cache_for_test();
         let _ = invalidate_all_sessions();
         let mut loads = 0usize;

@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { exit } from "@tauri-apps/plugin-process";
 import { useEffect, useRef, useState } from "react";
 import appLogoSvg from "./assets/app-logo.svg?raw";
 import { AboutPanel } from "./components/AboutPanel";
@@ -182,7 +183,7 @@ function App() {
     };
   }, []);
 
-  // Window-level drop → queue (CP1). Highlight is preview-only via isDragging.
+  // Window-level drop → queue. Highlight is preview-only via isDragging.
   useEffect(() => {
     if (!paths || paths.length === 0) return;
     if (lastProcessedRef.current === paths) return;
@@ -363,53 +364,69 @@ function App() {
   }, [settingsPresence.open, settingsView]);
 
   // Confirm quit when the queue still has work (running/pending).
+  // Note: preventDefault must run before any await, or the close is already gone.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
+
+    const queueHasLiveWork = () => {
+      const q = queueStore.getState();
+      return (
+        q.running ||
+        isQueueRunActive() ||
+        q.items.some((i) => i.status === "pending" || i.status === "processing")
+      );
+    };
+
+    const forceQuit = async () => {
+      const win = getCurrentWindow();
+      try {
+        await win.destroy();
+        return;
+      } catch (err) {
+        console.error("window destroy failed", err);
+      }
+      // Last resort — process:default includes allow-exit.
+      try {
+        await exit(0);
+      } catch (err) {
+        console.error("process exit failed", err);
+      }
+    };
 
     const setup = async () => {
       try {
         const win = getCurrentWindow();
         unlisten = await win.onCloseRequested(async (event) => {
-          const q = queueStore.getState();
-          const hasWork =
-            q.running ||
-            isQueueRunActive() ||
-            q.items.some(
-              (i) => i.status === "pending" || i.status === "processing",
-            );
-          if (!hasWork) return;
+          if (!queueHasLiveWork()) {
+            // Idle: allow the default close path (win.close / titlebar ×).
+            return;
+          }
 
+          // Async confirm — hold the close until the user decides.
           event.preventDefault();
           const ok = await ask(
             "Queue has unfinished work. Cancel the queue and quit?",
             { title: "Quit SwiftMask", kind: "warning" },
           );
           if (!ok) return;
+
           try {
-            if (q.running || isQueueRunActive()) {
+            if (isQueueRunActive() || queueStore.getState().running) {
               await cancelQueueProcess();
             }
           } catch (err) {
             console.error("cancel queue on quit failed", err);
           }
-          await win.destroy().catch((err) => {
-            console.error("window destroy failed", err);
-          });
+          // destroy (not close) so we don't re-enter this handler.
+          await forceQuit();
         });
       } catch (err) {
         // Web / non-Tauri: weak beforeunload fallback only.
         if (cancelled) return;
         console.debug("onCloseRequested unavailable", err);
         const onBeforeUnload = (e: BeforeUnloadEvent) => {
-          const q = queueStore.getState();
-          const hasWork =
-            q.running ||
-            isQueueRunActive() ||
-            q.items.some(
-              (i) => i.status === "pending" || i.status === "processing",
-            );
-          if (!hasWork) return;
+          if (!queueHasLiveWork()) return;
           e.preventDefault();
           e.returnValue = "";
         };

@@ -1,4 +1,4 @@
-//! Optional top-level folder watch for batch 1.1 CP5.
+//! Optional top-level folder watch (create-only, settled files).
 //! Create-only, 500ms size-stable settle, ignore temps/dotfiles/non-images.
 //!
 //! Event policy: only `EventKind::Create` starts a settle task. Rename-into-place

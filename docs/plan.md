@@ -2,7 +2,7 @@
 
 Cross-platform, local-first, GPU-accelerated background removal. MIT, no telemetry, no cloud.
 
-**Why** only — not a tree tour. Code is the implementation; git/release flow is [`workflow.md`](workflow.md). Batch product rules: [`batch-1.1.md`](batch-1.1.md).
+**Why** only — not a tree tour. Code is the implementation; git/release flow is [`workflow.md`](workflow.md).
 
 ---
 
@@ -14,7 +14,7 @@ Cross-platform, local-first, GPU-accelerated background removal. MIT, no telemet
 | A2 | Inference embedding | **In-process `ort`** | No IPC serialization overhead; direct EP control. |
 | A3 | GPU EP strategy | **DirectML (Win) + CUDA (Linux NVIDIA) + CPU fallback; CoreML later** | One Windows binary covers NVIDIA+AMD. Linux AMD → CPU (ROCm packaging cost too high for v1). |
 | A4 | Model registry | **`u2netp`, `isnet-general-use`, `RMBG-1.4`, `birefnet-general-lite`, `RMBG-2.0`** | UI: Balanced / Balanced+ / High / Max. `u2netp` is benchmark-only (hidden). BRIA models CC BY-NC 4.0; High MIT. |
-| A5 | Feature scope | **Single image + batch queue (1.1)** | Queue / open folder / optional watch — see [`batch-1.1.md`](batch-1.1.md). Still no post-edit, video, or manual mask editor. |
+| A5 | Feature scope | **Single image + batch queue** | Multi-drop / open folder / optional folder watch. No post-edit, video, or manual mask editor. |
 | A6 | Frontend | **React + TypeScript + Vite + Zustand** | Mature UI stack; events for long inference. |
 | A7 | Release targets | **Windows x64 (NSIS + MSI) + Linux x64 (AppImage + deb + rpm)** | macOS deferred (no device to test). |
 | A8 | Model delivery | **Lazy download + appData cache** | Small installer; user only downloads modes they use. |

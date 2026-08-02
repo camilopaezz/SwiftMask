@@ -1068,7 +1068,7 @@ button.mode-detail-download:disabled {
   color: var(--fg-muted);
 }
 
-/* ── Queue drawer (batch 1.1 CP1) ──────────────────────── */
+/* ── Queue drawer ─────────────────────────────────────── */
 
 .queue-drawer {
   flex: 0 0 auto;
