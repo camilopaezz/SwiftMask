@@ -34,6 +34,7 @@ pub fn run() {
             commands::path_exists,
             commands::path_is_dir,
             commands::pick_output_dir,
+            commands::clear_output_dir,
             commands::pick_folder,
             commands::list_folder_images,
             commands::ensure_dir,

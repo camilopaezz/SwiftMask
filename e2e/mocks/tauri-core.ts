@@ -66,6 +66,9 @@ export function invoke<T>(
       return Promise.resolve(undefined as T);
     case "pick_output_dir":
       return Promise.resolve(state.config.config.output_dir as T);
+    case "clear_output_dir":
+      state.config.config.output_dir = null;
+      return Promise.resolve(undefined as T);
     case "remove_image_background": {
       const inner = (args as Record<string, unknown>).args as {
         id: string;
