@@ -3,12 +3,20 @@ import { queueStore } from "../stores/queueStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
 import { MODEL_REGISTRY, PREFERRED_DEFAULT_MODE } from "./models";
+
+vi.mock("./desktopNotify", () => ({
+  maybeDesktopNotifyQueueFinished: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { maybeDesktopNotifyQueueFinished } from "./desktopNotify";
 import {
   isQueueRunActive,
   type QueueRunnerDeps,
   resetQueueRunnerForTests,
   startQueueProcess,
 } from "./queueRunner";
+
+const desktopNotifyMock = vi.mocked(maybeDesktopNotifyQueueFinished);
 
 function seedPending(paths: string[]) {
   queueStore.getState().activateWithItems(
@@ -61,6 +69,7 @@ describe("startQueueProcess", () => {
     queueStore.getState().clearAll();
     uiStore.getState().dismissNotice();
     seedProcessableSettings();
+    desktopNotifyMock.mockClear();
   });
 
   it("processes pending items serially and marks done", async () => {
@@ -79,6 +88,13 @@ describe("startQueueProcess", () => {
     expect(statuses.every((s) => s === "done")).toBe(true);
     expect(queueStore.getState().running).toBe(false);
     expect(uiStore.getState().notice?.title).toMatch(/2 succeeded/);
+    expect(desktopNotifyMock).toHaveBeenCalledWith(
+      {
+        title: expect.stringMatching(/2 succeeded/) as string,
+        body: undefined,
+      },
+      { terminalCount: 2 },
+    );
   });
 
   it("continues after a failure", async () => {
@@ -242,5 +258,69 @@ describe("startQueueProcess", () => {
     );
     expect(byId.seed).toBe("pending");
     expect(byId.watch).toBe("done");
+  });
+
+  it("cancel mid-run skips finish notice and desktop notify", async () => {
+    seedPending(["/tmp/a.png", "/tmp/b.png"]);
+    const cancelInference = vi.fn().mockResolvedValue(undefined);
+    const deps = baseDeps({
+      removeBackground: async () => {
+        queueStore.getState().setCancelRequested(true);
+        throw { code: "cancelled", message: "cancelled" };
+      },
+      cancelInference,
+    });
+
+    await startQueueProcess(deps);
+    expect(uiStore.getState().notice).toBeNull();
+    expect(desktopNotifyMock).not.toHaveBeenCalled();
+  });
+
+  it("GPU fallback soft-notices mid-run and finish prefers fallback copy", async () => {
+    seedPending(["/tmp/a.png"]);
+    let jobId: string | null = null;
+    let fallbackHandler:
+      | ((payload: {
+          id: string;
+          reason: string;
+          from_ep: string;
+          to_ep: string;
+        }) => void)
+      | null = null;
+
+    const deps = baseDeps({
+      removeBackground: async (job) => {
+        jobId = job.id;
+        fallbackHandler?.({
+          id: job.id,
+          reason: "oom",
+          from_ep: "cuda",
+          to_ep: "cpu",
+        });
+        // Soft mid-run notice only — no OS toast yet.
+        expect(uiStore.getState().notice?.code).toBe("inference_fallback");
+        expect(desktopNotifyMock).not.toHaveBeenCalled();
+      },
+      listenFallback: async (handler) => {
+        fallbackHandler = handler;
+        return () => {
+          fallbackHandler = null;
+        };
+      },
+    });
+
+    await startQueueProcess(deps);
+    expect(jobId).toBeTruthy();
+    const notice = uiStore.getState().notice;
+    expect(notice?.title).toMatch(/CPU/i);
+    expect(notice?.body).toMatch(/1 succeeded, 0 failed/);
+    expect(notice?.body).not.toMatch(/Queue:/);
+    expect(desktopNotifyMock).toHaveBeenCalledWith(
+      {
+        title: notice!.title,
+        body: notice!.body,
+      },
+      { terminalCount: 1 },
+    );
   });
 });
