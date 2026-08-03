@@ -6,6 +6,7 @@ import {
   prodQueueRunnerDeps,
   startQueueProcess,
 } from "./queueRunner";
+import { showAppErrorNotice } from "./showAppErrorNotice";
 import {
   invokePathExists,
   invokeWatchFolderStart,
@@ -48,7 +49,13 @@ export async function setFolderWatch(enabled: boolean): Promise<void> {
   }
 
   // Enabling watch does not arm auto-run — first Process still required.
-  await invokeWatchFolderStart(source.path);
+  try {
+    await invokeWatchFolderStart(source.path);
+  } catch (err) {
+    console.error("watch_folder_start failed", err);
+    showAppErrorNotice(err, { code: "watch_start_failed" });
+    return;
+  }
   if (!unsubReady) {
     unsubReady = await listenFolderReady((payload) => {
       void onFolderReady(payload.path);
