@@ -93,10 +93,6 @@ export function isQueueRunActive(): boolean {
   return runLoopActive || queueStore.getState().running;
 }
 
-export function getQueueRunGeneration(): number {
-  return runGeneration;
-}
-
 /**
  * Poll until the queue run loop is idle.
  * Callers that mutate the queue after cancel must await this after cancelQueueProcess.

@@ -174,7 +174,7 @@ export function invokeWatchFolderStop(): Promise<void> {
   return tauriInvoke("watch_folder_stop");
 }
 
-export const EVENT_FOLDER_READY = "folder:ready";
+const EVENT_FOLDER_READY = "folder:ready";
 
 export type FolderReadyPayload = {
   path: string;

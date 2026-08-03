@@ -57,7 +57,6 @@ export type QueueActions = {
   remove: (id: string) => void;
   clearAll: () => void;
   clearByStatus: (status: QueueItemStatus) => void;
-  setDrawerOpen: (open: boolean) => void;
   toggleDrawer: () => void;
   setRunning: (running: boolean) => void;
   setCancelRequested: (cancel: boolean) => void;
@@ -211,8 +210,6 @@ export const queueStore = createStore<QueueState & QueueActions>(
           active: true,
         };
       }),
-
-    setDrawerOpen: (open) => set({ drawerOpen: open, drawerTouched: true }),
 
     toggleDrawer: () =>
       set((state) => ({

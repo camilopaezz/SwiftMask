@@ -179,9 +179,8 @@ button.btn-primary:hover:not(:disabled) {
   border-color: transparent;
 }
 
-button.btn-danger {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+button.btn-ghost {
+  background: transparent;
 }
 
 input,
@@ -2284,11 +2283,6 @@ body.is-slider-dragging * {
 .settings-field-label {
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--fg-muted);
-}
-
-.settings-hint {
-  font-size: 0.8rem;
   color: var(--fg-muted);
 }
 

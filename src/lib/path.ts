@@ -23,7 +23,7 @@ export function normalizePathKey(path: string): string {
   return p;
 }
 
-export function parentDir(path: string): string {
+function parentDir(path: string): string {
   const lastSep = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   if (lastSep < 0) return ".";
   if (lastSep === 0) return path.slice(0, 1);

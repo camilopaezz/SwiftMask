@@ -44,7 +44,7 @@ function existingPathSet(): Set<string> {
 }
 
 /** Effective output dir: folder sibling for folder source, else settings.outputDir. */
-export function queueOutputDir(
+function queueOutputDir(
   settings: ProcessSettings,
   source: QueueSource | null = queueStore.getState().source,
 ): string | null {

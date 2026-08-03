@@ -85,9 +85,7 @@ export function invoke<T>(
       // Fixture paths are files; treat bare paths without a trailing separator
       // as files so multi-drop enqueue works in mocked e2e.
       const path = String(args?.path ?? "");
-      return Promise.resolve(
-        (path.endsWith("/") || path.endsWith("\\")) as T,
-      );
+      return Promise.resolve((path.endsWith("/") || path.endsWith("\\")) as T);
     }
     case "get_runtime_info":
       return Promise.resolve({

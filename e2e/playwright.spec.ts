@@ -111,10 +111,9 @@ test.describe("SwiftMask", () => {
       .toBe(true);
 
     // Queue path: finish notice + row marked done (no single-image "Done" label).
-    await expect(page.getByTestId("app-notice")).toContainText(
-      /1 succeeded/i,
-      { timeout: 10_000 },
-    );
+    await expect(page.getByTestId("app-notice")).toContainText(/1 succeeded/i, {
+      timeout: 10_000,
+    });
     await expect(page.locator(".queue-status.done")).toBeVisible();
 
     // Done state shows before/after comparison (img layers or slider).
