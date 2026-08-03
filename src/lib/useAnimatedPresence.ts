@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export const ANIMATION_DURATION_MS = 220;
+const ANIMATION_DURATION_MS = 220;
 
 function useMotionDuration(duration: number): number {
   const [reduced, setReduced] = useState(

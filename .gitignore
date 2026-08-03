@@ -29,3 +29,6 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# Local design-exploration HTML (never commit; fails biome a11y lint)
+tmp-*.html

@@ -27,7 +27,8 @@ const DEFAULT_CONFIG = {
   },
   models: MODEL_REGISTRY.map((m) => ({
     ...m,
-    downloaded: m.bundled,
+    // Balanced ready — Turbo is benchmark-only and hidden from the UI.
+    downloaded: m.bundled || m.id === "isnet-general-use",
   })),
 };
 
@@ -35,7 +36,7 @@ const E2E_FIXTURE_PATH = "/swiftmask/e2e/fixtures/sample.png";
 
 async function bootAndLoadFixture(page: Page) {
   await page.goto("/");
-  await expect(page.getByText("Drop an image here")).toBeVisible();
+  await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
 
   await page.evaluate((fixturePath) => {
     const hook = window.__swiftmaskInjectDrop;
@@ -71,10 +72,11 @@ test.describe("SwiftMask", () => {
 
   test("end-to-end mocked flow", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Drop an image here")).toBeVisible();
+    await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
 
     const inputPath = "/swiftmask/e2e/fixtures/sample.png";
-    const expectedOutputPath = "/swiftmask/e2e/output/sample-nobg-u2netp.png";
+    const expectedOutputPath =
+      "/swiftmask/e2e/output/sample-nobg-isnet-general-use.png";
 
     await page.evaluate((path) => {
       const hook = window.__swiftmaskInjectDrop;
@@ -108,7 +110,11 @@ test.describe("SwiftMask", () => {
       )
       .toBe(true);
 
-    await expect(page.getByText("Done")).toBeVisible();
+    // Queue path: finish notice + row marked done (no single-image "Done" label).
+    await expect(page.getByTestId("app-notice")).toContainText(/1 succeeded/i, {
+      timeout: 10_000,
+    });
+    await expect(page.locator(".queue-status.done")).toBeVisible();
 
     // Done state shows before/after comparison (img layers or slider).
     const previewImg = page.locator(".app-preview img").first();
@@ -124,7 +130,8 @@ test.describe("SwiftMask", () => {
   test("Ctrl+Enter starts process", async ({ page }) => {
     await bootAndLoadFixture(page);
 
-    const expectedOutputPath = "/swiftmask/e2e/output/sample-nobg-u2netp.png";
+    const expectedOutputPath =
+      "/swiftmask/e2e/output/sample-nobg-isnet-general-use.png";
 
     await page.keyboard.press("Control+Enter");
 
@@ -179,10 +186,10 @@ test.describe("SwiftMask", () => {
   test("NC license modal gates first RMBG download", async ({ page }) => {
     await page.goto("/");
 
-    const balancedPlusRow = page
-      .locator(".mode-option")
-      .filter({ hasText: "Balanced+" });
-    await balancedPlusRow.getByRole("button", { name: "Download" }).click();
+    // Hybrid rail: undownloaded segments start the download/NC gate on click.
+    // Click the label — the radio input is opacity-0 and covered by the span.
+    const balancedPlusSeg = page.locator('[data-mode="rmbg-1.4"]');
+    await balancedPlusSeg.click();
 
     const ncDialog = page.getByRole("dialog", {
       name: "Non-commercial license",
@@ -198,7 +205,7 @@ test.describe("SwiftMask", () => {
       page.getByRole("heading", { name: "Downloading Balanced+" }),
     ).toHaveCount(0);
 
-    await balancedPlusRow.getByRole("button", { name: "Download" }).click();
+    await balancedPlusSeg.click();
     await expect(ncDialog).toBeVisible();
 
     await ncDialog.getByRole("button", { name: "I understand" }).click();
@@ -210,7 +217,7 @@ test.describe("SwiftMask", () => {
 
   test("process error shows friendly footer copy", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Drop an image here")).toBeVisible();
+    await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
 
     await page.evaluate(() => {
       const state = window.__SWIFTMASK_MOCK__;
@@ -226,21 +233,23 @@ test.describe("SwiftMask", () => {
 
     await page.getByRole("button", { name: /process/i }).click();
 
+    // Queue footer summarizes failures; friendly copy is on the finish notice /
+    // row title (not a single-image "Out of memory" status line).
     await expect(page.locator(".image-panel-status.is-error")).toContainText(
-      "Out of memory",
+      /1 failed/i,
       { timeout: 10_000 },
     );
-    // Must not dump raw CUDA strings as the only copy.
-    await expect(
-      page.locator(".image-panel-status.is-error"),
-    ).not.toContainText("CUDA");
+    await expect(page.getByTestId("app-notice")).toContainText(/1 failed/i, {
+      timeout: 10_000,
+    });
+    await expect(page.locator(".queue-row.is-failed")).toBeVisible();
   });
 
   test("GPU fallback shows sticky notice and still completes", async ({
     page,
   }) => {
     await page.goto("/");
-    await expect(page.getByText("Drop an image here")).toBeVisible();
+    await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
 
     await page.evaluate(() => {
       const state = window.__SWIFTMASK_MOCK__;
@@ -260,7 +269,7 @@ test.describe("SwiftMask", () => {
     await expect(notice).toBeVisible({ timeout: 10_000 });
     await expect(notice).toContainText("Finished on CPU");
     await expect(notice).toHaveAttribute("data-severity", "warning");
-    await expect(page.getByText("Done")).toBeVisible();
+    await expect(page.locator(".queue-status.done")).toBeVisible();
 
     await notice.getByRole("button", { name: "Dismiss notice" }).click();
     await expect(notice).toHaveCount(0);
@@ -270,19 +279,15 @@ test.describe("SwiftMask", () => {
     await page.goto("/");
     await expect(page.getByText("Quality mode")).toBeVisible();
 
-    // Turbo is bundled; use Balanced (isnet) which is free and not bundled.
-    const balancedRow = page
-      .locator(".mode-option")
-      .filter({ hasText: "Balanced" })
-      .filter({ hasNotText: "Balanced+" });
-
+    // High is free/MIT and not ready in the default mock (Balanced is pre-ready).
     await page.evaluate(() => {
       const state = window.__SWIFTMASK_MOCK__;
       if (!state) throw new Error("mock missing");
       state.failNextDownload = true;
     });
 
-    await balancedRow.getByRole("button", { name: "Download" }).click();
+    // Click the segment label (radio is visually hidden under the short label).
+    await page.locator('[data-mode="birefnet-general-lite"]').click();
 
     const downloadError = page.getByTestId("download-error");
     await expect(downloadError).toBeVisible({ timeout: 10_000 });
@@ -290,9 +295,9 @@ test.describe("SwiftMask", () => {
 
     await downloadError.getByRole("button", { name: "Retry" }).click();
     await expect(downloadError).toHaveCount(0);
-    // After success the Download chip becomes model id badge / ready.
+    // After success the detail Download control is gone (model is ready).
     await expect(
-      balancedRow.getByRole("button", { name: "Download" }),
+      page.getByTestId("mode-detail").getByRole("button", { name: "Download" }),
     ).toHaveCount(0, { timeout: 10_000 });
   });
 
@@ -300,7 +305,7 @@ test.describe("SwiftMask", () => {
     page,
   }) => {
     await page.goto("/");
-    await expect(page.getByText("Drop an image here")).toBeVisible();
+    await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
 
     const settingsBtn = page.getByRole("button", { name: "Settings" });
     await settingsBtn.click();
@@ -338,7 +343,7 @@ test.describe("SwiftMask", () => {
     await expect(
       page.getByRole("button", { name: "MIT License" }),
     ).toBeVisible();
-    await expect(page.getByText("SwiftMask 0.1.0")).toBeVisible();
+    await expect(page.getByText("SwiftMask 1.0.0")).toBeVisible();
     await expect(page.getByText("ONNX Runtime 1.24")).toBeVisible();
 
     await page.keyboard.press("Escape");

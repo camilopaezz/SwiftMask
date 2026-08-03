@@ -67,9 +67,11 @@ Stable builds can **check GitHub Releases for signed updates** (Settings → Che
 ## Features
 
 - **Local inference** — images never leave your machine
-- **Multiple quality modes** — from a fast bundled model to larger downloadable ones
+- **Multiple quality modes** — Balanced through Max Quality (downloadable ONNX models)
 - **GPU acceleration** — CUDA on Linux (NVIDIA), DirectML on Windows; CPU fallback everywhere
 - **Drag and drop** — open images from the file picker or drop them on the preview pane
+- **Batch queue** — multi-drop or open a folder; serial processing with per-item progress, cancel, and retry
+- **Folder watch** (optional) — auto-enqueue new images in a watched folder after you start Process once
 - **Before/after slider** — scrub between input and output after processing
 - **Signed auto-updates** — optional check against GitHub Releases (no telemetry)
 
@@ -79,11 +81,12 @@ Supported input formats: **PNG, JPG, WEBP, BMP**.
 
 | Mode | Model | Size | License |
 |------|-------|------|---------|
-| **Turbo** | u2netp | ~4.5 MB | Apache-2.0 (bundled; always available) |
 | **Balanced** | isnet-general-use | ~178 MB | Apache-2.0 (download on first use; good default) |
 | **Balanced+** | rmbg-1.4 | ~176 MB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use) |
 | **High** | birefnet-general-lite (`birefnet-lite-512.onnx`, 512²) | ~183 MB | [MIT](https://opensource.org/licenses/MIT) (download on first use; lower VRAM than 1024 models) |
 | **Max Quality** | rmbg-2.0 | ~173 MB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use) |
+
+A small bundled model (`u2netp`) is used only for offline GPU/CPU **benchmarks** — it is not offered as a quality mode.
 
 ![Quality mode list](docs/screenshots/02-quality-modes.png)
 
@@ -91,9 +94,9 @@ Downloads are verified with **SHA-256** before use and cached under the app data
 
 ## How to use
 
-1. **Open an image** — click **Select image**, or drop a file on the preview pane (`Ctrl+O` / `⌘O`).
-2. **Pick a quality mode** — Turbo is always ready; other modes download on first use.
-3. Click **Process** (`Ctrl+Enter` / `⌘Enter`). Cancel with **Escape** while a job is running.
+1. **Open images** — **Select image**, drop one or more files on the preview (`Ctrl+O` / `⌘O`), or **Open folder** (`Ctrl+Shift+O` / `⌘⇧O`). Multi-drop and folders fill the queue drawer.
+2. **Pick a quality mode** — download on first use (Balanced is the preferred default).
+3. Click **Process** / **Process all** (`Ctrl+Enter` / `⌘Enter`). Cancel with **Escape** while a job is running. For a watched folder, turn on **Watch** and run Process once so later arrivals auto-process.
 4. Use the **comparison slider** to check the result. Output is saved as a transparent PNG.
 
 ![Before and after](docs/screenshots/03-before-after.jpg)
@@ -111,8 +114,8 @@ Default output name: `{original-stem}-nobg-{modelId}.png` next to the input (or 
 | **CUDA not used (Linux)** | Install proprietary NVIDIA drivers. The title-bar chip should read **CUDA** when active. Without drivers, CPU is used automatically. |
 | **Windows SmartScreen** | Expected for unsigned builds — *More info* → *Run anyway* if you trust the release. |
 | **Download fails** | Check network access to GitHub / Hugging Face. Incomplete files are re-downloaded and re-verified. |
-| **Out of memory on large images** | Prefer **Turbo** or **Balanced**; **High** runs at 512² to cut VRAM vs 1024 models. Avoid **Max Quality** on low-VRAM GPUs, or use a smaller source image. GPU OOM may automatically retry on CPU when the backend can detect it. |
-| **Need a commercial workflow** | Use **Turbo**, **Balanced**, or **High** (Apache-2.0 / MIT models). Do not use Balanced+ / Max Quality for commercial work unless you have a separate license from the model rights holder. |
+| **Out of memory on large images** | Prefer **Balanced** or **High** (High runs at 512² to cut VRAM vs 1024 models). Avoid **Max Quality** on low-VRAM GPUs, or use a smaller source image. GPU OOM may automatically retry on CPU when the backend can detect it. |
+| **Need a commercial workflow** | Use **Balanced** or **High** (Apache-2.0 / MIT models). Do not use Balanced+ / Max Quality for commercial work unless you have a separate license from the model rights holder. |
 
 ## Feedback & issues
 
@@ -152,10 +155,10 @@ The ONNX **models are third-party works** with their own terms (see the table ab
 
 | Mode | Can end users use outputs commercially? |
 |------|----------------------------------------|
-| Turbo, Balanced | Generally yes, under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) (attribution and license notice as required by Apache) |
+| Balanced | Generally yes, under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) (attribution and license notice as required by Apache) |
 | High | Generally yes, under [MIT](https://opensource.org/licenses/MIT) ([birefnet-lite-512](https://huggingface.co/studioludens/birefnet-lite-512) / BiRefNet_lite) |
 | Balanced+, Max Quality | **No** — [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) allows non-commercial use only |
 
-The **non-commercial restriction applies to people who use the RMBG models** (Balanced+ and Max Quality), not to publishing SwiftMask as free software. If you process images for paid work, client deliverables, product photography, or other commercial purposes, use **Turbo**, **Balanced**, or **High**, or obtain a separate commercial license from the model rights holder ([BRIA](https://bria.ai/) for RMBG-1.4 / RMBG-2.0).
+The **non-commercial restriction applies to people who use the RMBG models** (Balanced+ and Max Quality), not to publishing SwiftMask as free software. If you process images for paid work, client deliverables, product photography, or other commercial purposes, use **Balanced** or **High**, or obtain a separate commercial license from the model rights holder ([BRIA](https://bria.ai/) for RMBG-1.4 / RMBG-2.0).
 
 This section is a plain-language summary, not legal advice.
