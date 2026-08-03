@@ -67,9 +67,11 @@ Stable builds can **check GitHub Releases for signed updates** (Settings → Che
 ## Features
 
 - **Local inference** — images never leave your machine
-- **Multiple quality modes** — from a fast bundled model to larger downloadable ones
+- **Multiple quality modes** — Balanced through Max Quality (downloadable ONNX models)
 - **GPU acceleration** — CUDA on Linux (NVIDIA), DirectML on Windows; CPU fallback everywhere
 - **Drag and drop** — open images from the file picker or drop them on the preview pane
+- **Batch queue** — multi-drop or open a folder; serial processing with per-item progress, cancel, and retry
+- **Folder watch** (optional) — auto-enqueue new images in a watched folder after you start Process once
 - **Before/after slider** — scrub between input and output after processing
 - **Signed auto-updates** — optional check against GitHub Releases (no telemetry)
 
@@ -92,9 +94,9 @@ Downloads are verified with **SHA-256** before use and cached under the app data
 
 ## How to use
 
-1. **Open an image** — click **Select image**, or drop a file on the preview pane (`Ctrl+O` / `⌘O`).
+1. **Open images** — **Select image**, drop one or more files on the preview (`Ctrl+O` / `⌘O`), or **Open folder** (`Ctrl+Shift+O` / `⌘⇧O`). Multi-drop and folders fill the queue drawer.
 2. **Pick a quality mode** — download on first use (Balanced is the preferred default).
-3. Click **Process** (`Ctrl+Enter` / `⌘Enter`). Cancel with **Escape** while a job is running.
+3. Click **Process** / **Process all** (`Ctrl+Enter` / `⌘Enter`). Cancel with **Escape** while a job is running. For a watched folder, turn on **Watch** and run Process once so later arrivals auto-process.
 4. Use the **comparison slider** to check the result. Output is saved as a transparent PNG.
 
 ![Before and after](docs/screenshots/03-before-after.jpg)

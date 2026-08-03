@@ -6,6 +6,30 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-02
+
+Batch processing and settings polish on top of the 1.0 stable line.
+
+### Added
+
+- **Batch queue** — multi-image drop and serial processing with per-row progress, fail-continue, cancel that leaves remaining items pending, retry/clear, and keyboard Process/Cancel in queue mode
+- **Open folder** — load a folder of images into the queue; outputs write under `{folder}-nobg/` (created on Process, not on open); directory drop and `Ctrl+Shift+O`
+- **Folder watch** (optional) — top-level notify watch with settle delay and junk filters; auto-enqueue/process new images after the first manual Process; cancel pauses auto-run until Process again
+- **Overwrite policy for batch** — one-shot Yes/No/Cancel dialog (Overwrite all / Skip existing / Cancel); sticky mid-run policy; watch auto-run overwrites without re-prompting
+- **Warm ORT session across queue jobs** — successful runs keep the cached session for serial throughput; drop on OOM (all keys), other errors (one key), EP invalidate, or 120s idle TTL
+- Settings panel redesign: theme segmented control, EP chips + mini benchmark, output path Browse/Reset (`clear_output_dir`), updates status card with version badge and status pills
+- Hybrid quality rail (Balanced / Balanced+ / High / Max) with detail panel; Turbo/`u2netp` remains benchmark-only and is not a user-facing mode
+
+### Changed
+
+- File source UI: compact file block with mini actions and Watch toggle; queue drawer with status/action icons and animated expand/collapse
+- Quit/leave confirmations when the queue has pending or running work; EP locked while a batch run is active
+
+### Fixed
+
+- Queue FIFO ordering, path-key dedup (Windows separators/case), and finish-toast suppression on cancel
+- E2E mocks and specs for queue finish/failed UX, High mode segments, and multi-drop path_is_dir
+
 ## [1.0.0] - 2026-07-31
 
 First stable release. Non-prerelease tags enable the in-app auto-updater (`/releases/latest`).
@@ -62,7 +86,8 @@ First stable release. Non-prerelease tags enable the in-app auto-updater (`/rele
 - Quality modes: Turbo (bundled), Balanced, Balanced+, Max Quality
 - GPU benchmark, model downloads with SHA-256 verification, compare slider export
 
-[Unreleased]: https://github.com/camilopaezz/SwiftMask/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/camilopaezz/SwiftMask/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/camilopaezz/SwiftMask/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/camilopaezz/SwiftMask/compare/v0.9.0-beta.1...v1.0.0
 [0.9.0-beta.1]: https://github.com/camilopaezz/SwiftMask/compare/v0.1.0...v0.9.0-beta.1
 [0.1.0]: https://github.com/camilopaezz/SwiftMask/releases/tag/v0.1.0
