@@ -3,7 +3,7 @@ import { isProcessBusy, type ProcessSettings } from "./currentImage";
 import { loadSingleImage } from "./queue";
 import { showAppErrorNotice } from "./showAppErrorNotice";
 
-export async function pickImagePath(): Promise<string | null> {
+async function pickImagePath(): Promise<string | null> {
   const selected = await open({
     multiple: false,
     filters: [

@@ -6,14 +6,6 @@ pub fn decode(bytes: &[u8]) -> Result<DynamicImage, AppError> {
     image::load_from_memory(bytes).map_err(|e| crate::error::image_decode_error(e.to_string()))
 }
 
-pub fn encode_png(image: &DynamicImage) -> Result<Vec<u8>, AppError> {
-    let mut buf = Vec::new();
-    image
-        .write_to(&mut std::io::Cursor::new(&mut buf), ImageFormat::Png)
-        .map_err(|e| crate::error::image_encode_error(e.to_string()))?;
-    Ok(buf)
-}
-
 pub fn encode_png_rgba(rgb: &RgbImage, alpha: &GrayImage) -> Result<Vec<u8>, AppError> {
     if rgb.dimensions() != alpha.dimensions() {
         return Err(crate::error::image_encode_error(format!(
@@ -67,7 +59,11 @@ mod tests {
         let decoded = decode(&jpeg).unwrap();
         assert_eq!(decoded.width(), 32);
         assert_eq!(decoded.height(), 24);
-        let _png = encode_png(&decoded).unwrap();
+        let alpha = GrayImage::from_fn(32, 24, |_, _| image::Luma([255]));
+        let png = encode_png_rgba(&decoded.to_rgb8(), &alpha).unwrap();
+        let round_trip = decode(&png).unwrap();
+        assert_eq!(round_trip.width(), 32);
+        assert_eq!(round_trip.height(), 24);
     }
 
     #[test]

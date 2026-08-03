@@ -25,14 +25,6 @@ export function setNcLicenseAck(): void {
   }
 }
 
-export function clearNcLicenseAck(): void {
-  try {
-    localStorage.removeItem(NC_LICENSE_ACK_KEY);
-  } catch {
-    // Ignore unavailable storage.
-  }
-}
-
 export function shouldShowNcBadge(
   model: Pick<ModelMeta, "license" | "bundled" | "downloaded">,
 ): boolean {

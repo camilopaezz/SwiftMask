@@ -24,7 +24,7 @@ Cross-platform, local-first, GPU-accelerated background removal. MIT, no telemet
 | A12 | Export | **PNG with alpha only** | Covers most use; minimal postprocessing. |
 | A13 | Testing | **Rust unit + inference smoke + Vitest + mocked Playwright** | Real Tauri WebDriver still open. |
 | A14 | Name & license | **`SwiftMask` + MIT** | Compatible with model licenses used. |
-| A15 | Image pipeline | **`image` + `imageproc`** | Mask I/O and light feathering. |
+| A15 | Image pipeline | **`image` crate** | Decode/encode + custom mask normalize/resize/feather in `pipeline.rs`. |
 | A16 | Updates & telemetry | **Signed Tauri updater + zero telemetry** | Static `latest.json` on GitHub Releases; Ed25519 package sigs. |
 | A17 | Bundled benchmark model | **Embed `u2netp` via `include_bytes!`** | Offline EP benchmark only — not a UI quality mode. |
 | A18 | Output filename | **`<stem>-nobg-<modelId>.png` + overwrite prompt** | Predictable; inputs untouched. |

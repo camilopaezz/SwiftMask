@@ -51,11 +51,11 @@ export type InferenceFallbackPayload = {
   to_ep: string;
 };
 
-export const EVENT_PROGRESS = "inference:progress";
-export const EVENT_DONE = "inference:done";
-export const EVENT_ERROR = "inference:error";
-export const EVENT_FALLBACK = "inference:fallback";
-export const EVENT_MODEL_DOWNLOAD = "model:download";
+const EVENT_PROGRESS = "inference:progress";
+const EVENT_DONE = "inference:done";
+const EVENT_ERROR = "inference:error";
+const EVENT_FALLBACK = "inference:fallback";
+const EVENT_MODEL_DOWNLOAD = "model:download";
 
 export type GpuInfo = {
   vendor: string;
