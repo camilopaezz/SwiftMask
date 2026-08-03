@@ -1,10 +1,14 @@
-//! Optional top-level folder watch (create-only, settled files).
-//! Create-only, 500ms size-stable settle, ignore temps/dotfiles/non-images.
+//! Optional top-level folder watch (create / rename-into-place, settled files).
+//! 500ms size-stable settle, ignore temps/dotfiles/non-images.
 //!
-//! Event policy: only `EventKind::Create` starts a settle task. Rename-into-place
-//! and copy completion typically surface as Create (or Create then size growth
-//! that the settle poll observes). We intentionally do not spawn on Modify, to
-//! avoid reprocessing and unbounded settle tasks on write churn.
+//! Event policy: start a settle task on:
+//! - `EventKind::Create` (direct write / copy create)
+//! - rename-into-place (`Modify(Name(To|Both|Any))`) — file managers and atomic
+//!   save patterns use rename, which on Linux notify is **not** a Create
+//!
+//! We intentionally do not spawn on `Modify(Data)`, to avoid reprocessing and
+//! unbounded settle tasks on write churn. Size growth for an already-settling
+//! path is observed by the settle poll.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -12,6 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use notify::event::{ModifyKind, RenameMode};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -87,6 +92,18 @@ fn should_consider(path: &Path, folder: &Path) -> bool {
     is_image_path(path)
 }
 
+/// Events that indicate a new top-level path may have appeared.
+fn is_arrival_event(kind: &EventKind) -> bool {
+    match kind {
+        EventKind::Create(_) | EventKind::Any => true,
+        EventKind::Modify(ModifyKind::Name(mode)) => matches!(
+            mode,
+            RenameMode::To | RenameMode::Both | RenameMode::Any
+        ),
+        _ => false,
+    }
+}
+
 fn file_size(path: &Path) -> Option<u64> {
     std::fs::metadata(path).ok().map(|m| m.len())
 }
@@ -131,11 +148,13 @@ fn spawn_settle(
                     return;
                 }
                 (Some(a), Some(b)) if a == b => {
+                    // Empty files are not ready — keep waiting for content (or deadline).
+                    // Exiting on stable zero drops create-then-write races where the first
+                    // Create arrives at size 0 and content lands just after settle.
+                    if b == 0 {
+                        continue;
+                    }
                     if Instant::now().duration_since(stable_since) >= settle {
-                        if b == 0 {
-                            prune();
-                            return;
-                        }
                         if generation.load(Ordering::SeqCst) != started_gen {
                             prune();
                             return;
@@ -161,7 +180,9 @@ fn spawn_settle(
 }
 
 pub fn start_watch(app: AppHandle, folder: String) -> Result<(), AppError> {
-    let folder_path = PathBuf::from(&folder);
+    // Strip trailing separators so parent() of child paths matches the watched dir.
+    let trimmed = folder.trim_end_matches(['/', '\\']);
+    let folder_path = PathBuf::from(if trimmed.is_empty() { &folder } else { trimmed });
     if !folder_path.is_dir() {
         return Err(AppError::Dialog(format!("not a directory: {folder}")));
     }
@@ -191,9 +212,7 @@ pub fn start_watch(app: AppHandle, folder: String) -> Result<(), AppError> {
         let Ok(event) = res else {
             return;
         };
-        // Create-only: starts settle. Size growth is observed by the settle poll.
-        // (Rename-into-place / atomic replace usually appear as Create on Linux/Windows.)
-        if !matches!(event.kind, EventKind::Create(_)) {
+        if !is_arrival_event(&event.kind) {
             return;
         }
         for path in event.paths {
@@ -243,5 +262,64 @@ pub fn stop_watch(app: &AppHandle) {
                 .unwrap_or_else(|e| e.into_inner())
                 .clear();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use notify::event::{CreateKind, EventKind, ModifyKind, RenameMode};
+
+    #[test]
+    fn arrival_events_include_create_and_rename_into_place() {
+        assert!(is_arrival_event(&EventKind::Create(CreateKind::File)));
+        assert!(is_arrival_event(&EventKind::Create(CreateKind::Any)));
+        assert!(is_arrival_event(&EventKind::Modify(ModifyKind::Name(
+            RenameMode::To
+        ))));
+        assert!(is_arrival_event(&EventKind::Modify(ModifyKind::Name(
+            RenameMode::Both
+        ))));
+        assert!(is_arrival_event(&EventKind::Modify(ModifyKind::Name(
+            RenameMode::Any
+        ))));
+        assert!(is_arrival_event(&EventKind::Any));
+    }
+
+    #[test]
+    fn arrival_events_exclude_data_modify_and_rename_from() {
+        assert!(!is_arrival_event(&EventKind::Modify(ModifyKind::Data(
+            notify::event::DataChange::Any
+        ))));
+        assert!(!is_arrival_event(&EventKind::Modify(ModifyKind::Name(
+            RenameMode::From
+        ))));
+        assert!(!is_arrival_event(&EventKind::Access(
+            notify::event::AccessKind::Close(notify::event::AccessMode::Write)
+        )));
+        assert!(!is_arrival_event(&EventKind::Remove(
+            notify::event::RemoveKind::File
+        )));
+    }
+
+    #[test]
+    fn should_consider_top_level_images_only() {
+        let folder = PathBuf::from("/tmp/watched");
+        assert!(should_consider(
+            &folder.join("shot.png"),
+            &folder
+        ));
+        assert!(should_consider(
+            &folder.join("photo.JPEG"),
+            &folder
+        ));
+        assert!(!should_consider(
+            &folder.join("nested").join("shot.png"),
+            &folder
+        ));
+        assert!(!should_consider(&folder.join("notes.txt"), &folder));
+        assert!(!should_consider(&folder.join(".hidden.png"), &folder));
+        assert!(!should_consider(&folder.join("shot.png.tmp"), &folder));
+        assert!(!should_consider(&folder.join("shot.crdownload"), &folder));
     }
 }
