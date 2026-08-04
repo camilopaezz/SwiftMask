@@ -19,6 +19,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(crate::processing::ProcessingState::new())
         .manage(crate::download::DownloadState::new())
         .manage(std::sync::Arc::new(crate::folder_watch::FolderWatchState::new()))

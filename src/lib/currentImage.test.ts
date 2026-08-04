@@ -20,6 +20,14 @@ import {
 } from "./currentImage";
 import { MODEL_REGISTRY, PREFERRED_DEFAULT_MODE } from "./models";
 
+vi.mock("./desktopNotify", () => ({
+  maybeDesktopNotifyQueueFinished: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { maybeDesktopNotifyQueueFinished } from "./desktopNotify";
+
+const desktopNotifyMock = vi.mocked(maybeDesktopNotifyQueueFinished);
+
 const handlers: Record<string, (event: { payload: unknown }) => void> = {};
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -514,6 +522,8 @@ describe("currentImage", () => {
         progress: 80,
         stage: "encoding",
       });
+      uiStore.getState().dismissNotice();
+      desktopNotifyMock.mockClear();
       applyDone({
         id: "img-2",
         output_path: "/tmp/out.png",
@@ -532,6 +542,15 @@ describe("currentImage", () => {
       expect(current?.stage).toBeNull();
       // applyDone only updates image state; timings are set by the event listener.
       expect(settingsStore.getState().lastJobTimings).toBeNull();
+      // Single-image terminal: same finish notice + desktop notify path as queue.
+      expect(uiStore.getState().notice?.title).toMatch(/1 succeeded/);
+      expect(desktopNotifyMock).toHaveBeenCalledWith(
+        {
+          title: expect.stringMatching(/1 succeeded/) as string,
+          body: undefined,
+        },
+        { terminalCount: 1 },
+      );
     });
 
     it("ignores done for different id", () => {
@@ -552,6 +571,8 @@ describe("currentImage", () => {
         ...makeReadyItem({ id: "img-3" }),
         status: "processing",
       });
+      uiStore.getState().dismissNotice();
+      desktopNotifyMock.mockClear();
       applyError({ id: "img-3", code: "oom", message: "CUDA out of memory" });
       const current = imageStore.getState().current;
       expect(current?.status).toBe("error");
@@ -560,6 +581,14 @@ describe("currentImage", () => {
         message: "CUDA out of memory",
       });
       expect(current?.stage).toBeNull();
+      expect(uiStore.getState().notice?.title).toMatch(/0 succeeded, 1 failed/);
+      expect(desktopNotifyMock).toHaveBeenCalledWith(
+        {
+          title: expect.stringMatching(/0 succeeded, 1 failed/) as string,
+          body: undefined,
+        },
+        { terminalCount: 1 },
+      );
     });
 
     it("ignores error for different id", () => {
@@ -576,11 +605,51 @@ describe("currentImage", () => {
         ...makeReadyItem({ id: "img-4" }),
         status: "processing",
       });
+      uiStore.getState().dismissNotice();
+      desktopNotifyMock.mockClear();
       applyError({ id: "img-4", code: "cancelled", message: "cancelled" });
       const current = imageStore.getState().current;
       expect(current?.status).toBe("cancelled");
       expect(current?.error).toBeNull();
       expect(current?.stage).toBeNull();
+      expect(uiStore.getState().notice).toBeNull();
+      expect(desktopNotifyMock).not.toHaveBeenCalled();
+    });
+
+    it("finish after fallback prefers fallback wording and desktop notify", () => {
+      imageStore.getState().set({
+        ...makeReadyItem({ id: "img-fb" }),
+        status: "processing",
+      });
+      setActiveRunIdForTests("run-fb");
+      uiStore.getState().dismissNotice();
+      desktopNotifyMock.mockClear();
+      applyFallback({
+        id: "run-fb",
+        reason: "oom",
+        from_ep: "cuda",
+        to_ep: "cpu",
+      });
+      expect(uiStore.getState().notice?.code).toBe("inference_fallback");
+      // Mid-run soft notice only — OS toast waits for terminal.
+      expect(desktopNotifyMock).not.toHaveBeenCalled();
+
+      applyDone({
+        id: "run-fb",
+        output_path: "/tmp/out.png",
+        timings: { stages: [], total_seconds: 0 },
+      });
+      const notice = uiStore.getState().notice;
+      expect(notice?.title).toMatch(/CPU/i);
+      expect(notice?.body).toMatch(/1 succeeded, 0 failed/);
+      expect(notice?.body).not.toMatch(/Queue:/);
+      expect(desktopNotifyMock).toHaveBeenCalledWith(
+        {
+          title: notice!.title,
+          body: notice!.body,
+        },
+        { terminalCount: 1 },
+      );
     });
 
     it("ignores late done after optimistic cancel for that job id", async () => {

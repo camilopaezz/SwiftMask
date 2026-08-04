@@ -3,6 +3,7 @@ import { type ImageItem, imageStore } from "../stores/imageStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
 import { formatFallbackNotice } from "./errorCopy";
+import { showFinishNotice } from "./finishNotice";
 import { isProcessableMode } from "./models";
 import { shouldProceedWithOverwrite } from "./overwrite";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
@@ -67,12 +68,26 @@ let activeRunId: string | null = null;
 /** Run ids the user cancelled; late done/error/progress for these are ignored. */
 const discardedRunIds = new Set<string>();
 
+/**
+ * Soft GPU→CPU fallback for the active single-image run. Surfaced at terminal
+ * via showFinishNotice (same preference as the queue path).
+ */
+let lastSingleFallback: { from_ep: string; to_ep: string } | null = null;
+
+/**
+ * Avoid double finish banners when both the inference:error event and the
+ * invoke rejection path observe the same failure.
+ */
+let singleTerminalNotified = false;
+
 /** Test-only: clear gate left open by aborted/timed-out startProcess. */
 export function resetProcessGateForTests(): void {
   processGate = false;
   cancelGate = false;
   activeRunId = null;
   discardedRunIds.clear();
+  lastSingleFallback = null;
+  singleTerminalNotified = false;
 }
 
 /** Test-only: bind event handlers to a run id without going through startProcess. */
@@ -226,6 +241,8 @@ export async function startProcess(
     // Per-run id so late events from a cancelled attempt cannot match a re-run.
     const runId = crypto.randomUUID();
     activeRunId = runId;
+    lastSingleFallback = null;
+    singleTerminalNotified = false;
     imageStore.getState().patch({
       status: "processing",
       progress: 0,
@@ -262,6 +279,7 @@ export async function startProcess(
             stage: null,
             error: { code: parsed.code, message: parsed.message },
           });
+          notifySingleTerminal(0, 1);
         }
       }
       return "failed";
@@ -351,6 +369,14 @@ export function applyProgress(payload: {
   });
 }
 
+function notifySingleTerminal(succeeded: number, failed: number): void {
+  if (singleTerminalNotified) return;
+  if (succeeded + failed <= 0) return;
+  singleTerminalNotified = true;
+  showFinishNotice(succeeded, failed, lastSingleFallback);
+  lastSingleFallback = null;
+}
+
 /** @returns true if the done event was applied to image state. */
 export function applyDone(payload: InferenceDonePayload): boolean {
   if (
@@ -367,6 +393,8 @@ export function applyDone(payload: InferenceDonePayload): boolean {
     stage: null,
     outputPath: payload.output_path,
   });
+  // Single-image Process is a 1-item queue terminal (plan: same OS/AppNotice path).
+  notifySingleTerminal(1, 0);
   return true;
 }
 
@@ -402,19 +430,29 @@ export function applyError(payload: {
     stage: null,
     error: { code, message },
   });
+  notifySingleTerminal(0, 1);
 }
 
-/** Apply GPU→CPU fallback notice for the active run (process stays non-error). */
+/**
+ * Soft GPU→CPU fallback for the active run. Process continues; finish banner
+ * prefers this wording over a plain success summary (same as queue path).
+ * Mid-run: soft AppNotice only — OS toast waits for done/error terminal.
+ */
 export function applyFallback(payload: InferenceFallbackPayload): void {
+  // Non-terminal resolve so a mid-run fallback does not treat this as job end.
   if (
     !resolveRunEvent(payload.id, {
-      terminal: true,
+      terminal: false,
       requireProcessing: false,
     })
   ) {
     return;
   }
 
+  lastSingleFallback = {
+    from_ep: payload.from_ep,
+    to_ep: payload.to_ep,
+  };
   const copy = formatFallbackNotice(payload.from_ep, payload.to_ep);
   uiStore.getState().showNotice({
     severity: "warning",
