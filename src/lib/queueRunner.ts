@@ -8,6 +8,7 @@ import {
   prodStartProcessDeps,
 } from "./currentImage";
 import { formatFallbackNotice } from "./errorCopy";
+import { showFinishNotice } from "./finishNotice";
 import { isProcessableMode } from "./models";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
 import { deriveOutputPath } from "./path";
@@ -113,30 +114,6 @@ export function resetQueueRunnerForTests(): void {
   runGeneration += 1;
   queueStore.getState().setRunning(false);
   queueStore.getState().setCancelRequested(false);
-}
-
-function showFinishNotice(
-  succeeded: number,
-  failed: number,
-  fallback: { from_ep: string; to_ep: string } | null,
-): void {
-  // Prefer the GPU→CPU warning over a generic finish banner when any job fell back.
-  if (fallback) {
-    const copy = formatFallbackNotice(fallback.from_ep, fallback.to_ep);
-    uiStore.getState().showNotice({
-      severity: "warning",
-      title: copy.title,
-      body: `${copy.body} Queue: ${succeeded} succeeded, ${failed} failed.`,
-      code: "inference_fallback",
-    });
-    return;
-  }
-  const severity = failed > 0 ? ("warning" as const) : ("info" as const);
-  uiStore.getState().showNotice({
-    severity,
-    title: `Finished: ${succeeded} succeeded, ${failed} failed`,
-    code: "queue_finished",
-  });
 }
 
 function effectiveOutputDir(settings: ProcessSettings): string | null {
@@ -372,7 +349,7 @@ export async function startQueueProcess(
             terminalOutput = payload.output_path;
           }),
         );
-        // Soft GPU→CPU notice; finish banner prefers this over a plain summary.
+        // Soft GPU→CPU notice mid-run (AppNotice only); finish prefers this wording.
         unsubs.push(
           await listenFallback((payload) => {
             if (payload.id !== jobId) return;
@@ -380,6 +357,13 @@ export async function startQueueProcess(
               from_ep: payload.from_ep,
               to_ep: payload.to_ep,
             };
+            const copy = formatFallbackNotice(payload.from_ep, payload.to_ep);
+            uiStore.getState().showNotice({
+              severity: "warning",
+              title: copy.title,
+              body: copy.body,
+              code: "inference_fallback",
+            });
           }),
         );
         unsubs.push(

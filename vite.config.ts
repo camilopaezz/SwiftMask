@@ -30,6 +30,10 @@ function getE2EAliases(): Record<string, string> {
       __dirname,
       "e2e/mocks/tauri-plugin-opener.ts",
     ),
+    "@tauri-apps/plugin-notification": path.resolve(
+      __dirname,
+      "e2e/mocks/tauri-plugin-notification.ts",
+    ),
   };
 }
 
