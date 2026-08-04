@@ -1,6 +1,6 @@
 [package]
 name = "swiftmask"
-version = "1.1.0"
+version = "1.1.1"
 description = "SwiftMask — local background removal desktop app"
 authors = ["you"]
 license = "MIT"

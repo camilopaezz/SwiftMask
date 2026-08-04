@@ -6,6 +6,20 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-04
+
+Finish notices polish and folder-watch reliability on the 1.1 batch line.
+
+### Added
+
+- Dual-surface finish notices for queue batches and single-image Process: always show AppNotice; OS desktop toast when the main window is unfocused or minimized
+- AppNotice auto-dismiss: info after 5s, warning after 8s (paused while hovered); errors stay until dismissed
+- Prefer GPU→CPU fallback wording over a plain success summary when a job fell back mid-run
+
+### Fixed
+
+- Folder watch: detect rename-into-place and harden settle so late-arriving files are not missed
+
 ## [1.1.0] - 2026-08-02
 
 Batch processing and settings polish on top of the 1.0 stable line.
@@ -86,7 +100,8 @@ First stable release. Non-prerelease tags enable the in-app auto-updater (`/rele
 - Quality modes: Turbo (bundled), Balanced, Balanced+, Max Quality
 - GPU benchmark, model downloads with SHA-256 verification, compare slider export
 
-[Unreleased]: https://github.com/camilopaezz/SwiftMask/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/camilopaezz/SwiftMask/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/camilopaezz/SwiftMask/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/camilopaezz/SwiftMask/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/camilopaezz/SwiftMask/compare/v0.9.0-beta.1...v1.0.0
 [0.9.0-beta.1]: https://github.com/camilopaezz/SwiftMask/compare/v0.1.0...v0.9.0-beta.1
