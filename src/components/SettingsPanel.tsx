@@ -1,6 +1,7 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { type RefObject, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { epLabel } from "../lib/epLabel";
 import {
   formatUpdateCheckFailedCopy,
@@ -48,11 +49,21 @@ type UpdateUiStatus =
   | "error"
   | "restarting";
 
-const THEME_OPTIONS: { value: Theme; label: string }[] = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
+const THEME_OPTIONS: { value: Theme; labelKey: string }[] = [
+  { value: "system", labelKey: "settings.themeSystem" },
+  { value: "light", labelKey: "settings.themeLight" },
+  { value: "dark", labelKey: "settings.themeDark" },
 ];
+
+const STAGE_KEYS: Record<string, string> = {
+  decoding: "stages.decoding",
+  preprocessing: "stages.preprocessing",
+  inferring: "stages.inferring",
+  "inferring-cpu": "stages.inferringCpu",
+  postprocessing: "stages.postprocessing",
+  encoding: "stages.encoding",
+  Processing: "stages.processing",
+};
 
 function formatVram(bytes: number): string {
   const gib = bytes / 1024 ** 3;
@@ -72,6 +83,7 @@ export function SettingsPanel({
   onOpenAbout,
   aboutEntryRef,
 }: SettingsPanelProps) {
+  const { t } = useTranslation();
   const {
     ep,
     outputDir,
@@ -180,9 +192,7 @@ export function SettingsPanel({
       if (result.status === "unavailable") {
         setUpdateStatus("error");
         showAppNotice(
-          formatUpdateCheckFailedCopy(
-            "Updates are only available in the desktop app.",
-          ),
+          formatUpdateCheckFailedCopy(t("errors.updateUnavailable.body")),
           "warning",
           "update_unavailable",
         );
@@ -220,10 +230,10 @@ export function SettingsPanel({
       return;
     }
     const version = updateVersion ?? pendingUpdate.version;
-    const confirmed = await ask(
-      `Download and install SwiftMask ${version}? The app will restart when finished.`,
-      { title: "Install update", kind: "info" },
-    );
+    const confirmed = await ask(t("settings.installConfirm", { version }), {
+      title: t("settings.installTitle"),
+      kind: "info",
+    });
     if (!confirmed) return;
 
     setUpdateStatus("downloading");
@@ -256,54 +266,62 @@ export function SettingsPanel({
   const updatePill = (() => {
     switch (updateStatus) {
       case "checking":
-        return { label: "Checking…", tone: "neutral" as const };
+        return { label: t("settings.pillChecking"), tone: "neutral" as const };
       case "up-to-date":
-        return { label: "Current", tone: "ok" as const };
+        return { label: t("settings.pillCurrent"), tone: "ok" as const };
       case "available":
-        return { label: "Ready", tone: "accent" as const };
+        return { label: t("settings.pillReady"), tone: "accent" as const };
       case "downloading":
         return {
-          label: updatePercent != null ? `${updatePercent}%` : "Downloading…",
+          label:
+            updatePercent != null
+              ? `${updatePercent}%`
+              : t("settings.pillDownloading"),
           tone: "accent" as const,
         };
       case "restarting":
-        return { label: "Restarting…", tone: "accent" as const };
+        return {
+          label: t("settings.pillRestarting"),
+          tone: "accent" as const,
+        };
       case "error":
-        return { label: "Failed", tone: "warn" as const };
+        return { label: t("settings.pillFailed"), tone: "warn" as const };
       default:
-        return { label: "Stable", tone: "neutral" as const };
+        return { label: t("settings.pillStable"), tone: "neutral" as const };
     }
   })();
 
   const updateCardSubLines = (() => {
     switch (updateStatus) {
       case "checking":
-        return ["Looking for a newer stable release…"];
+        return [t("settings.subLooking")];
       case "up-to-date":
         return [
           appVersion
-            ? `You're on ${appVersion} · latest stable`
-            : "You're on the latest stable release.",
+            ? t("settings.subOnVersionLatest", { version: appVersion })
+            : t("settings.subLatestStable"),
         ];
       case "available":
         return [
-          "Ready to install",
-          ...(appVersion ? [`You're on ${appVersion}`] : []),
+          t("settings.subReadyToInstall"),
+          ...(appVersion
+            ? [t("settings.subYoureOn", { version: appVersion })]
+            : []),
         ];
       case "downloading":
         return [
           updateVersion
-            ? `Downloading ${updateVersion}…`
-            : "Downloading update…",
+            ? t("settings.subDownloadingVersion", { version: updateVersion })
+            : t("settings.subDownloadingUpdate"),
         ];
       case "restarting":
-        return ["Installing and restarting…"];
+        return [t("settings.subInstallingRestarting")];
       case "error":
-        return ["Couldn't check for updates. Try again."];
+        return [t("settings.subCheckFailed")];
       default:
         return appVersion
-          ? [`You're on ${appVersion} · stable channel`]
-          : ["Stable channel"];
+          ? [t("settings.subOnVersionChannel", { version: appVersion })]
+          : [t("settings.subStableChannel")];
     }
   })();
 
@@ -314,12 +332,19 @@ export function SettingsPanel({
     Boolean(updateVersion);
 
   const checkLabel =
-    updateStatus === "checking" ? "Checking…" : "Check for updates";
+    updateStatus === "checking"
+      ? t("settings.checking")
+      : t("settings.checkForUpdates");
+
+  const stageLabel = (stage: string) => {
+    const key = STAGE_KEYS[stage];
+    return key ? t(key) : stage;
+  };
 
   return (
     <div className="settings-panel">
       <div className="settings-field">
-        <div className="settings-field-label">Theme</div>
+        <div className="settings-field-label">{t("settings.theme")}</div>
         <div className="settings-seg">
           {THEME_OPTIONS.map((opt) => (
             <button
@@ -331,19 +356,21 @@ export function SettingsPanel({
                 if (isTheme(opt.value)) setTheme(opt.value);
               }}
             >
-              {opt.label}
+              {t(opt.labelKey)}
             </button>
           ))}
         </div>
       </div>
 
       <div className="settings-field">
-        <div className="settings-field-label">Execution provider</div>
+        <div className="settings-field-label">
+          {t("settings.executionProvider")}
+        </div>
         <div className="settings-provider-block">
           <div className="settings-ep-chips">
             {epOptions.length === 0 ? (
               <span className="settings-provider-status">
-                Detecting providers…
+                {t("settings.detectingProviders")}
               </span>
             ) : (
               epOptions.map((epOption) => (
@@ -353,11 +380,7 @@ export function SettingsPanel({
                   className="settings-ep-chip"
                   aria-pressed={ep === epOption}
                   disabled={epLocked}
-                  title={
-                    epLocked
-                      ? "Execution provider is locked while the queue is running"
-                      : undefined
-                  }
+                  title={epLocked ? t("settings.epLockedTitle") : undefined}
                   onClick={() => void handleEpChange(epOption)}
                 >
                   {epLabel(epOption)}
@@ -372,8 +395,8 @@ export function SettingsPanel({
             disabled={loading || epLocked}
             title={
               epLocked
-                ? "Benchmark is locked while the queue is running"
-                : "Time each available EP and select the fastest"
+                ? t("settings.benchmarkLockedTitle")
+                : t("settings.benchmarkTitle")
             }
           >
             <span className="settings-mini-bench-icon" aria-hidden="true">
@@ -389,50 +412,54 @@ export function SettingsPanel({
                 <path d="M12.5 2.5v2.8H9.7M3.5 13.5v-2.8h2.8" />
               </svg>
             </span>
-            {loading ? "Running…" : "Benchmark"}
+            {loading ? t("settings.benchmarkRunning") : t("settings.benchmark")}
           </button>
         </div>
         {loading ? (
-          <div className="settings-provider-status">Benchmarking…</div>
+          <div className="settings-provider-status">
+            {t("settings.benchmarking")}
+          </div>
         ) : epLocked ? (
           <div className="settings-provider-status">
-            Locked while the queue is running
+            {t("settings.lockedWhileQueue")}
           </div>
         ) : null}
       </div>
 
       <div className="settings-field">
         <div className="settings-field-head">
-          <div className="settings-field-label">Output directory</div>
+          <div className="settings-field-label">
+            {t("settings.outputDirectory")}
+          </div>
           {outputDir ? (
             <button
               type="button"
               className="settings-path-reset"
-              aria-label="Reset output directory to same as input"
-              title="Use same folder as each input file"
+              aria-label={t("settings.resetOutputDirAria")}
+              title={t("settings.resetOutputDirTitle")}
               onClick={() => void handleClearOutputDir()}
             >
-              Reset
+              {t("common.reset")}
             </button>
           ) : null}
         </div>
         <div className="settings-path-row">
           <div
             className="settings-path-value"
-            title={outputDir ?? "Same as input (default)"}
+            title={outputDir ?? t("settings.sameAsInputDefault")}
           >
-            <span>{outputDir ?? "Same as input"}</span>
+            <span>{outputDir ?? t("settings.sameAsInput")}</span>
           </div>
           <button
             type="button"
             aria-label={
               outputDir
-                ? `Change output directory (current: ${outputDir})`
-                : "Choose output directory"
+                ? t("settings.changeOutputDirAria", { path: outputDir })
+                : t("settings.chooseOutputDirAria")
             }
             onClick={() => void handlePickOutputDir()}
           >
-            Browse…
+            {t("common.browse")}
           </button>
         </div>
       </div>
@@ -445,7 +472,9 @@ export function SettingsPanel({
           <div className="settings-update-head">
             <div className="settings-update-copy">
               <div className="settings-update-title-row">
-                <div className="settings-update-title">Updates</div>
+                <div className="settings-update-title">
+                  {t("settings.updates")}
+                </div>
                 {showUpdateVersionBadge ? (
                   <span className="settings-update-ver-badge">
                     {updateVersion}
@@ -477,17 +506,19 @@ export function SettingsPanel({
                 className="btn-primary"
                 onClick={() => void handleInstallAndRestart()}
               >
-                Install and restart
+                {t("settings.installAndRestart")}
               </button>
             )}
             {(updateStatus === "downloading" ||
               updateStatus === "restarting") && (
               <button type="button" disabled>
                 {updateStatus === "restarting"
-                  ? "Restarting…"
+                  ? t("settings.pillRestarting")
                   : updatePercent != null
-                    ? `Downloading… ${updatePercent}%`
-                    : "Downloading…"}
+                    ? t("settings.downloadingPercent", {
+                        percent: updatePercent,
+                      })
+                    : t("settings.pillDownloading")}
               </button>
             )}
           </div>
@@ -500,32 +531,39 @@ export function SettingsPanel({
 
       {gpuInfo && (
         <div className="settings-meta">
-          <div>GPU: {gpuInfo.vendor}</div>
+          <div>{t("settings.gpu", { vendor: gpuInfo.vendor })}</div>
           <div>
-            VRAM:{" "}
-            {gpuInfo.vram_bytes != null
-              ? formatVram(gpuInfo.vram_bytes)
-              : "Unknown"}
+            {t("settings.vram", {
+              value:
+                gpuInfo.vram_bytes != null
+                  ? formatVram(gpuInfo.vram_bytes)
+                  : t("settings.vramUnknown"),
+            })}
           </div>
           <div>
-            EPs:{" "}
-            {gpuInfo.available_eps
-              .map((epOption) => epLabel(epOption))
-              .join(", ")}
+            {t("settings.eps", {
+              list: gpuInfo.available_eps
+                .map((epOption) => epLabel(epOption))
+                .join(", "),
+            })}
           </div>
-          <div>Opt: {gpuInfo.optimization}</div>
+          <div>{t("settings.opt", { value: gpuInfo.optimization })}</div>
         </div>
       )}
 
       {lastJobTimings && lastJobTimings.stages.length > 0 && (
         <div className="settings-meta">
-          <div>Last job</div>
+          <div>{t("settings.lastJob")}</div>
           {lastJobTimings.stages.map((timing) => (
             <div key={timing.stage}>
-              {timing.stage}: {formatSeconds(timing.seconds)}
+              {stageLabel(timing.stage)}: {formatSeconds(timing.seconds)}
             </div>
           ))}
-          <div>total: {formatSeconds(lastJobTimings.total_seconds)}</div>
+          <div>
+            {t("settings.total", {
+              value: formatSeconds(lastJobTimings.total_seconds),
+            })}
+          </div>
         </div>
       )}
 
@@ -536,7 +574,7 @@ export function SettingsPanel({
           className="settings-about-link"
           onClick={onOpenAbout}
         >
-          About &amp; licenses
+          {t("settings.aboutAndLicenses")}
         </button>
       </div>
     </div>

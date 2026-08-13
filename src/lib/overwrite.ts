@@ -1,3 +1,5 @@
+import i18n from "../i18n";
+
 export async function shouldProceedWithOverwrite(
   outputPath: string,
   exists: (path: string) => Promise<boolean>,
@@ -7,5 +9,5 @@ export async function shouldProceedWithOverwrite(
   if (!fileExists) {
     return true;
   }
-  return await ask(`${outputPath} already exists. Overwrite?`);
+  return await ask(i18n.t("overwrite.singleAsk", { path: outputPath }));
 }

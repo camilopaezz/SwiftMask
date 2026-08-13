@@ -1,3 +1,4 @@
+import i18n from "../i18n";
 import { uiStore } from "../stores/uiStore";
 import { maybeDesktopNotifyQueueFinished } from "./desktopNotify";
 import { formatFallbackNotice } from "./errorCopy";
@@ -17,7 +18,7 @@ export function showFinishNotice(
   if (fallback) {
     const copy = formatFallbackNotice(fallback.from_ep, fallback.to_ep);
     title = copy.title;
-    body = `${copy.body} ${succeeded} succeeded, ${failed} failed.`;
+    body = `${copy.body} ${i18n.t("finish.fallbackSuffix", { succeeded, failed })}`;
     uiStore.getState().showNotice({
       severity: "warning",
       title,
@@ -26,7 +27,7 @@ export function showFinishNotice(
     });
   } else {
     const severity = failed > 0 ? ("warning" as const) : ("info" as const);
-    title = `Finished: ${succeeded} succeeded, ${failed} failed`;
+    title = i18n.t("finish.finishedWithCounts", { succeeded, failed });
     body = undefined;
     uiStore.getState().showNotice({
       severity,

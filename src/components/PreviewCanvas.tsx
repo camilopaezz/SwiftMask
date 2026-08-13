@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 
 export type PreviewCanvasProps = {
   inputPath: string | null;
@@ -69,6 +70,7 @@ function CompareSlider({
   outputUrl,
   aspectRatio,
 }: CompareSliderProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState(50);
   const draggingRef = useRef(false);
@@ -135,7 +137,7 @@ function CompareSlider({
       style={{ ["--img-ar" as string]: String(aspectRatio) }}
       onPointerDown={onPointerDown}
       role="slider"
-      aria-label="Before and after comparison"
+      aria-label={t("preview.compareAria")}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(position)}
@@ -166,8 +168,8 @@ function CompareSlider({
         <span className="compare-handle-knob" />
       </div>
       <div className="compare-labels" aria-hidden>
-        <span>Before</span>
-        <span>After</span>
+        <span>{t("preview.before")}</span>
+        <span>{t("preview.after")}</span>
       </div>
     </div>
   );
@@ -179,6 +181,7 @@ export function PreviewCanvas({
   canCompare = false,
   isDragging = false,
 }: PreviewCanvasProps) {
+  const { t } = useTranslation();
   const inputUrl = useLocalFileUrl(inputPath);
   const outputUrl = useLocalFileUrl(canCompare ? outputPath : null);
   const showCompare = Boolean(
@@ -194,14 +197,10 @@ export function PreviewCanvas({
       <div className={`preview-canvas${isDragging ? " is-dragging" : ""}`}>
         <div className="preview-empty">
           <p className="preview-empty-title">
-            {isDragging
-              ? "Drop images or a folder"
-              : "Drop images or a folder to start a queue"}
+            {isDragging ? t("preview.dropNow") : t("preview.dropToStart")}
           </p>
-          <p className="preview-empty-formats">PNG, JPG, WEBP, BMP</p>
-          <p className="preview-empty-hint">
-            Select image · Ctrl+O · Open folder · Ctrl+Shift+O
-          </p>
+          <p className="preview-empty-formats">{t("preview.formats")}</p>
+          <p className="preview-empty-hint">{t("preview.hint")}</p>
         </div>
       </div>
     );
@@ -221,11 +220,11 @@ export function PreviewCanvas({
             className="preview-image-frame"
             style={{ ["--img-ar" as string]: String(aspectRatio) }}
           >
-            <img src={inputUrl} alt="Input" draggable={false} />
+            <img src={inputUrl} alt={t("preview.inputAlt")} draggable={false} />
           </div>
         ) : inputUrl ? (
           <div className="preview-image-frame preview-image-frame-fallback">
-            <img src={inputUrl} alt="Input" draggable={false} />
+            <img src={inputUrl} alt={t("preview.inputAlt")} draggable={false} />
           </div>
         ) : null}
       </div>

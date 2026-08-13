@@ -1,4 +1,5 @@
 import { message } from "@tauri-apps/plugin-dialog";
+import i18n from "../i18n";
 
 export type BatchOverwriteChoice = "overwrite_all" | "skip_existing" | "cancel";
 
@@ -28,21 +29,20 @@ export async function prodBatchOverwriteChooser(info: {
   count: number;
 }): Promise<BatchOverwriteChoice> {
   const n = info.count;
-  const result = await message(
-    `${n} output file${n === 1 ? "" : "s"} already exist.`,
-    {
-      title: "Outputs already exist",
-      kind: "warning",
-      buttons: {
-        yes: "Overwrite all",
-        no: "Skip existing",
-        cancel: "Cancel",
-      },
+  const overwriteAll = i18n.t("overwrite.overwriteAll");
+  const skipExisting = i18n.t("overwrite.skipExisting");
+  const result = await message(i18n.t("overwrite.batchBody", { count: n }), {
+    title: i18n.t("overwrite.batchTitle"),
+    kind: "warning",
+    buttons: {
+      yes: overwriteAll,
+      no: skipExisting,
+      cancel: i18n.t("common.cancel"),
     },
-  );
+  });
 
   // Custom buttons return the label string; also accept defaults defensively.
-  if (result === "Overwrite all" || result === "Yes") return "overwrite_all";
-  if (result === "Skip existing" || result === "No") return "skip_existing";
+  if (result === overwriteAll || result === "Yes") return "overwrite_all";
+  if (result === skipExisting || result === "No") return "skip_existing";
   return "cancel";
 }

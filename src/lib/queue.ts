@@ -1,4 +1,5 @@
 import { ask } from "@tauri-apps/plugin-dialog";
+import i18n from "../i18n";
 import { imageStore } from "../stores/imageStore";
 import {
   type QueueItem,
@@ -119,9 +120,7 @@ async function confirmReplaceIfNeeded(
     isQueueRunActive() ||
     q.items.some((i) => i.status === "processing");
   const ok = await askConfirm(
-    live
-      ? "Replace the current queue? Pending work will be cancelled."
-      : "Replace the current queue with this folder?",
+    live ? i18n.t("queue.replaceLive") : i18n.t("queue.replaceIdle"),
   );
   if (!ok) return false;
   await endQueueSession();
@@ -154,20 +153,22 @@ export async function openFolderAsQueue(
     images = await listImages(folderPath);
   } catch (err) {
     console.error("list_folder_images failed", err);
-    showInfo("Could not read folder", String(err));
+    showInfo(i18n.t("queue.couldNotReadFolder"), String(err));
     return "failed";
   }
 
   if (images.length === 0) {
     showInfo(
-      "No images in this folder",
-      "Only top-level PNG, JPG, WEBP, BMP are scanned (subfolders are ignored).",
+      i18n.t("queue.noImagesInFolder.title"),
+      i18n.t("queue.noImagesInFolder.body"),
     );
     return "empty";
   }
 
   if (images.length > QUEUE_ENQUEUE_CONFIRM_THRESHOLD) {
-    const ok = await deps.askConfirm(`Enqueue ${images.length} images?`);
+    const ok = await deps.askConfirm(
+      i18n.t("queue.enqueueConfirm", { count: images.length }),
+    );
     if (!ok) return "cancelled";
   }
 
@@ -196,7 +197,7 @@ export async function pickAndOpenFolder(
     return result === "enqueued";
   } catch (err) {
     console.error("pick folder failed", err);
-    showInfo("Could not open folder", String(err));
+    showInfo(i18n.t("queue.couldNotOpenFolder"), String(err));
     return false;
   }
 }
@@ -227,8 +228,8 @@ export async function enqueueFromDrop(
     (imagePaths.length > 0 || nonImageFiles.length > 0 || dirs.length > 1)
   ) {
     showInfo(
-      "Drop either images or one folder",
-      "Mixed drops and multi-folder drops are not supported.",
+      i18n.t("queue.dropEither.title"),
+      i18n.t("queue.dropEither.bodyMixed"),
     );
     return "rejected";
   }
@@ -246,9 +247,9 @@ export async function enqueueFromDrop(
 
   if (imagePaths.length === 0) {
     showInfo(
-      "No images dropped",
+      i18n.t("queue.noImagesDropped.title"),
       nonImageFiles.length > 0
-        ? "Drop PNG, JPG, WEBP, or BMP files, or one folder."
+        ? i18n.t("queue.noImagesDropped.body")
         : undefined,
     );
     return "rejected";
@@ -256,8 +257,8 @@ export async function enqueueFromDrop(
 
   if (nonImageFiles.length > 0) {
     showInfo(
-      "Drop either images or one folder",
-      "Mixed drops are not supported.",
+      i18n.t("queue.dropEither.title"),
+      i18n.t("queue.dropEither.bodyMixedFiles"),
     );
     return "rejected";
   }
@@ -265,12 +266,17 @@ export async function enqueueFromDrop(
   const known = existingPathSet();
   const fresh = imagePaths.filter((p) => !known.has(normalizePathKey(p)));
   if (fresh.length === 0) {
-    showInfo("Already in queue", "Those images are already listed.");
+    showInfo(
+      i18n.t("queue.alreadyInQueue.title"),
+      i18n.t("queue.alreadyInQueue.body"),
+    );
     return "rejected";
   }
 
   if (fresh.length > QUEUE_ENQUEUE_CONFIRM_THRESHOLD) {
-    const ok = await deps.askConfirm(`Enqueue ${fresh.length} images?`);
+    const ok = await deps.askConfirm(
+      i18n.t("queue.enqueueConfirm", { count: fresh.length }),
+    );
     if (!ok) return "cancelled";
   }
 
@@ -314,9 +320,7 @@ export async function loadSingleImage(
       isQueueRunActive() ||
       q.items.some((i) => i.status === "processing");
     const ok = await deps.askConfirm(
-      live
-        ? "Leave the queue? Pending work will be cancelled and the queue cleared."
-        : "Leave the queue and open a single image? The queue will be cleared.",
+      live ? i18n.t("queue.leaveLive") : i18n.t("queue.leaveIdle"),
     );
     if (!ok) return false;
     await endQueueSession();
@@ -346,7 +350,7 @@ export async function clearQueue(): Promise<void> {
     isQueueRunActive() ||
     q.items.some((i) => i.status === "processing")
   ) {
-    const ok = await ask("Stop processing and clear the queue?");
+    const ok = await ask(i18n.t("queue.stopAndClear"));
     if (!ok) return;
   }
   await endQueueSession();

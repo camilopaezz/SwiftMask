@@ -6,6 +6,20 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-12
+
+English and Spanish UI localization.
+
+### Added
+
+- **i18n** — wire `i18next` / `react-i18next` across the UI; English and Spanish locale files
+- Language follows the OS locale (`es*` → Spanish, otherwise English); document `lang` updates with language changes
+- Spanish review page (`locale-review.html`) for checking translated strings
+
+### Changed
+
+- Error copy, finish notices, queue/overwrite dialogs, and settings/about UI use translation keys instead of hard-coded English
+
 ## [1.1.1] - 2026-08-04
 
 Finish notices polish and folder-watch reliability on the 1.1 batch line.

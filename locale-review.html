@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SwiftMask · Spanish locale review</title>
+<style>
+:root {
+  --bg: #f4f4f5;
+  --surface: #fff;
+  --text: #18181b;
+  --muted: #71717a;
+  --border: #e4e4e7;
+  --accent: #2563eb;
+  --same: #a16207;
+  --same-bg: #fef9c3;
+  --token: #b91c1c;
+  --token-bg: #fee2e2;
+  --sticky: #fafafa;
+  --shadow: 0 1px 2px rgba(0,0,0,.06);
+  --radius: 10px;
+  --pad: 12px;
+  --tap: 44px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #09090b;
+    --surface: #18181b;
+    --text: #fafafa;
+    --muted: #a1a1aa;
+    --border: #27272a;
+    --accent: #60a5fa;
+    --same: #facc15;
+    --same-bg: #422006;
+    --token: #fca5a5;
+    --token-bg: #450a0a;
+    --sticky: #111113;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font: 15px/1.45 var(--sans);
+  color: var(--text);
+  background: var(--bg);
+}
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--sticky);
+  border-bottom: 1px solid var(--border);
+  padding: 10px var(--pad) 12px;
+  box-shadow: var(--shadow);
+}
+h1 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.meta strong { color: var(--text); font-weight: 600; }
+.search {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.search:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+main { padding: 8px var(--pad) 48px; max-width: 1100px; margin: 0 auto; }
+.section { margin-top: 8px; }
+.section-head {
+  position: sticky;
+  top: 132px;
+  z-index: 10;
+  background: var(--sticky);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 12px 0 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+}
+.card.flag-same { border-left: 3px solid var(--same); }
+.card.flag-token { border-left: 3px solid var(--token); }
+.card.flag-same.flag-token { border-left-color: var(--token); }
+.key {
+  font: 0.8rem/1.3 var(--mono);
+  color: var(--accent);
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 8px; }
+.badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+.badge.same { background: var(--same-bg); color: var(--same); }
+.badge.token { background: var(--token-bg); color: var(--token); }
+.langs { display: grid; gap: 8px; }
+.lang {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+}
+.lang-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.lang-val {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.95rem;
+}
+.lang-val.empty { color: var(--muted); font-style: italic; }
+.empty-state {
+  text-align: center;
+  color: var(--muted);
+  padding: 40px 16px;
+}
+@media (min-width: 720px) {
+  .langs { grid-template-columns: 1fr 1fr; }
+  .toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .search { flex: 1 1 280px; max-width: 420px; }
+  .section-head { top: 96px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>SwiftMask · Spanish locale review</h1>
+  <div class="toolbar">
+    <input class="search" id="q" type="search" placeholder="Filter by key or text…" autocomplete="off" enterkeyhint="search">
+    <label class="toggle"><input type="checkbox" id="hideSame"> Hide EN === ES</label>
+    <div class="meta">
+      <span>Total: <strong id="total">0</strong></span>
+      <span>Showing: <strong id="shown">0</strong></span>
+      <span>Same as EN: <strong id="sameCount">0</strong></span>
+      <span>Token mismatch: <strong id="tokenCount">0</strong></span>
+    </div>
+  </div>
+</header>
+<main id="main"></main>
+<script>
+const EN = {"common":{"cancel":"Cancel","close":"Close","remove":"Remove","reset":"Reset","browse":"Browse…","yes":"Yes","no":"No","dismiss":"Dismiss","retry":"Retry","back":"Back"},"stages":{"processing":"Processing","decoding":"decoding","preprocessing":"preprocessing","inferring":"inferring","inferringCpu":"inferring-cpu","postprocessing":"postprocessing","encoding":"encoding"},"status":{"ready":"Ready","done":"Done","error":"Error","cancelled":"Cancelled","cancelling":"Cancelling…","starting":"Starting…","running":"running","pending":"pending","failed":"failed"},"errors":{"busy":{"title":"Already processing","body":"Wait for the current job to finish or cancel it."},"download_busy":{"title":"Download already in progress","body":"Wait for the current download to finish or cancel it."},"network":{"title":"Network error","body":"Check your connection and try again."},"disk_full":{"title":"Not enough disk space","body":"Free some space and try again."},"model_corrupt":{"title":"Model file is damaged","body":"Delete it from the model list and download again."},"model_not_ready":{"title":"Model not downloaded","body":"Download this quality mode before processing."},"model_unknown":{"title":"Unknown model","body":"Pick a quality mode from the list."},"oom":{"title":"Out of memory","body":"Try a smaller image or switch to CPU in Settings."},"gpu":{"title":"GPU problem","body":"Check drivers or switch to CPU in Settings."},"image_unreadable":{"title":"Couldn’t read that image","body":"Try another file (PNG, JPG, WEBP, or BMP)."},"output_failed":{"title":"Couldn’t save the result","body":"Check the output folder permissions."},"config":{"title":"Couldn’t update settings"},"dialog":{"title":"Couldn’t open the file dialog"},"inference_failed":{"title":"Processing failed","body":"Try again. If it keeps failing, switch quality mode or EP."},"unknown":{"title":"Something went wrong"},"cancelled":{"title":"Cancelled"},"fallback":{"title":"Finished on CPU","body":"GPU ran out of memory ({{from}} → {{to}}). Settings still use your GPU for next runs."},"firstRunGpu":{"title":"Couldn't finish GPU setup","body":"Using CPU. You can re-run the benchmark in Settings."},"modelsUnavailable":{"title":"Couldn't load model list","body":"Download a quality mode after the list loads. Try restarting the app."},"downloadCancelUnconfirmed":{"title":"Couldn't confirm cancel","body":"The download may still finish in the background."},"revealFailed":{"title":"Couldn't show file in folder","body":"Check that the output path still exists."},"updateAvailable":{"title":"Update {{version}} available","body":"Open Settings to install and restart."},"upToDate":{"title":"You're up to date","body":"No newer stable release was found."},"updateCheckFailed":{"title":"Couldn't check for updates","body":"Check your connection and try again."},"updateInstallFailed":{"title":"Couldn't install the update","body":"Try again, or download the installer from GitHub Releases."},"updateUnavailable":{"body":"Updates are only available in the desktop app."},"ensureDirFailed":{"title":"Could not create output folder"}},"queue":{"replaceLive":"Replace the current queue? Pending work will be cancelled.","replaceIdle":"Replace the current queue with this folder?","couldNotReadFolder":"Could not read folder","noImagesInFolder":{"title":"No images in this folder","body":"Only top-level PNG, JPG, WEBP, BMP are scanned (subfolders are ignored)."},"enqueueConfirm":"Enqueue {{count}} images?","couldNotOpenFolder":"Could not open folder","dropEither":{"title":"Drop either images or one folder","bodyMixed":"Mixed drops and multi-folder drops are not supported.","bodyMixedFiles":"Mixed drops are not supported."},"noImagesDropped":{"title":"No images dropped","body":"Drop PNG, JPG, WEBP, or BMP files, or one folder."},"alreadyInQueue":{"title":"Already in queue","body":"Those images are already listed."},"leaveLive":"Leave the queue? Pending work will be cancelled and the queue cleared.","leaveIdle":"Leave the queue and open a single image? The queue will be cleared.","stopAndClear":"Stop processing and clear the queue?"},"overwrite":{"singleAsk":"{{path}} already exists. Overwrite?","batchTitle":"Outputs already exist","batchBody_one":"{{count}} output file already exist.","batchBody_other":"{{count}} output files already exist.","overwriteAll":"Overwrite all","skipExisting":"Skip existing"},"ncLicense":{"title":"Non-commercial license","summary":"Balanced+ and Max Quality use models under CC BY-NC 4.0. You may use outputs for personal or non-commercial work only — not for paid work, client deliverables, product photography, or other commercial purposes.","commercialHint":"For commercial use, choose Balanced or High, or obtain a separate license from the model rights holder (BRIA).","licenseLabel":"CC BY-NC 4.0","accept":"I understand","cancel":"Cancel"},"settings":{"theme":"Theme","themeSystem":"System","themeLight":"Light","themeDark":"Dark","executionProvider":"Execution provider","detectingProviders":"Detecting providers…","epLockedTitle":"Execution provider is locked while the queue is running","benchmark":"Benchmark","benchmarkRunning":"Running…","benchmarking":"Benchmarking…","benchmarkLockedTitle":"Benchmark is locked while the queue is running","benchmarkTitle":"Time each available EP and select the fastest","lockedWhileQueue":"Locked while the queue is running","outputDirectory":"Output directory","resetOutputDirAria":"Reset output directory to same as input","resetOutputDirTitle":"Use same folder as each input file","sameAsInput":"Same as input","sameAsInputDefault":"Same as input (default)","changeOutputDirAria":"Change output directory (current: {{path}})","chooseOutputDirAria":"Choose output directory","updates":"Updates","checkForUpdates":"Check for updates","checking":"Checking…","installAndRestart":"Install and restart","installConfirm":"Download and install SwiftMask {{version}}? The app will restart when finished.","installTitle":"Install update","pillStable":"Stable","pillChecking":"Checking…","pillCurrent":"Current","pillReady":"Ready","pillDownloading":"Downloading…","pillRestarting":"Restarting…","pillFailed":"Failed","subLooking":"Looking for a newer stable release…","subOnVersionLatest":"You're on {{version}} · latest stable","subLatestStable":"You're on the latest stable release.","subReadyToInstall":"Ready to install","subYoureOn":"You're on {{version}}","subDownloadingVersion":"Downloading {{version}}…","subDownloadingUpdate":"Downloading update…","subInstallingRestarting":"Installing and restarting…","subCheckFailed":"Couldn't check for updates. Try again.","subOnVersionChannel":"You're on {{version}} · stable channel","subStableChannel":"Stable channel","downloadingPercent":"Downloading… {{percent}}%","gpu":"GPU: {{vendor}}","vram":"VRAM: {{value}}","vramUnknown":"Unknown","eps":"EPs: {{list}}","opt":"Opt: {{value}}","lastJob":"Last job","total":"total: {{value}}","aboutAndLicenses":"About & licenses"},"about":{"appName":"SwiftMask","versionLine":"SwiftMask {{version}}","ortLine":"ONNX Runtime {{version}}","mit":"SwiftMask is open source under the","mitLicense":"MIT License","mitRest":". That covers the application itself. The ONNX models are third-party works with their own terms (see below).","modelsHeading":"Models","colMode":"Mode","colModel":"Model","colLicense":"License","ncFootnote":"{{modes}} are CC BY-NC 4.0 (non-commercial). Personal use is fine; commercial use requires a separate license from the model rights holder.","github":"GitHub","issues":"Issues"},"fileBlock":{"noImage":"No image","selectOrOpen":"Select or open a folder","folderSession":"Folder session","watching":"Watching · top-level only","imagesInQueue_one":"{{count}} image in queue","imagesInQueue_other":"{{count}} images in queue","dropMore":"Drop more to append","singleImage":"Single image","watch":"Watch","removeImage":"Remove image","selectImage":"Select image","selectImageTitle":"Select image (Ctrl+O)","openFolder":"Open folder…","openFolderTitle":"Open folder (Ctrl+Shift+O)"},"imagePanel":{"nothingToProcess":"Nothing to process","showInFolder":"Show in folder","process":"Process","processAll":"Process All","reRun":"Re-run","processTitle":"Process (Ctrl+Enter)","processPendingTitle":"Process pending (Ctrl+Enter)","cancelTitle":"Cancel (Esc)","queueRunningStatus":"{{done}}/{{total}} · {{name}} · {{stage}}","queueIdleStatus":"{{total}} in queue · {{pending}} pending","queueIdleStatusWithFailed":"{{total}} in queue · {{pending}} pending · {{failed}} failed","statusWithError":"{{status}}: {{error}}"},"modeSelector":{"qualityMode":"Quality mode","nonCommercial":"Non-commercial","commercialOk":"Commercial OK","downloadRequired":"{{name}} — download required","modeTitle":"{{name}} ({{id}}) — {{size}}px","notDownloadedAria":"{{name}} (not downloaded)","model":"Model","license":"License","download":"Download"},"download":{"downloading":"Downloading {{modelName}}","verifying":"Verifying {{modelName}}","cancelling":"Cancelling {{modelName}}…","cancellingStatus":"Cancelling…","verifyingStatus":"Verifying…"},"queueDrawer":{"queue":"Queue","noSelection":"No selection","pillFailed":"{{done}}/{{total}} · {{failed}} failed","pillRunning":"{{done}}/{{total}} · running","pillPending":"{{done}}/{{total}} · pending","actionsAria":"Queue actions","clearCompleted":"Clear completed","clearFailed":"Clear failed","clearPending":"Clear pending","retryFailed":"Retry failed","clearAll":"Clear all…","openOutputs":"Open outputs","collapse":"Collapse queue","expand":"Expand queue","imagesCount_one":"{{count}} image","imagesCount_other":"{{count}} images","imagesCountWithFailed_one":"{{count}} image · {{failed}} failed","imagesCountWithFailed_other":"{{count}} images · {{failed}} failed","itemsAria":"Queue items","retry":"Retry","retryAria":"Retry {{name}}","showInFolder":"Show in folder","showInFolderAria":"Show {{name}} in folder","removeFromQueue":"Remove from queue","removeAria":"Remove {{name}}","processingSub":"{{name}} · {{progress}}%"},"preview":{"dropToStart":"Drop images or a folder to start a queue","dropNow":"Drop images or a folder","formats":"PNG, JPG, WEBP, BMP","hint":"Select image · Ctrl+O · Open folder · Ctrl+Shift+O","before":"Before","after":"After","compareAria":"Before and after comparison","inputAlt":"Input"},"titleBar":{"settings":"Settings","minimize":"Minimize","maximize":"Maximize","restore":"Restore","close":"Close"},"app":{"loadingModels":"Loading models…","loadingModelsAria":"Loading models","detectingAcceleration":"Detecting best acceleration…","preview":"Preview","back":"Back","about":"About","settings":"Settings","closeAbout":"Close about","closeSettings":"Close settings","quitTitle":"Quit SwiftMask","quitBody":"Queue has unfinished work. Cancel the queue and quit?","logoAria":"SwiftMask"},"finish":{"finishedWithCounts":"Finished: {{succeeded}} succeeded, {{failed}} failed","fallbackSuffix":"{{succeeded}} succeeded, {{failed}} failed."},"notice":{"dismiss":"Dismiss notice"}};
+
+const ES = {"common":{"cancel":"Cancelar","close":"Cerrar","remove":"Quitar","reset":"Restablecer","browse":"Examinar…","yes":"Sí","no":"No","dismiss":"Cerrar","retry":"Reintentar","back":"Atrás"},"stages":{"processing":"Procesando","decoding":"decodificando","preprocessing":"preprocesando","inferring":"infiriendo","inferringCpu":"infiriendo-cpu","postprocessing":"posprocesando","encoding":"codificando"},"status":{"ready":"Listo","done":"Completado","error":"Error","cancelled":"Cancelado","cancelling":"Cancelando…","starting":"Iniciando…","running":"en curso","pending":"pendiente","failed":"fallidos"},"errors":{"busy":{"title":"Ya se está procesando","body":"Espera a que termine el trabajo actual o cancélalo."},"download_busy":{"title":"Ya hay una descarga en curso","body":"Espera a que termine la descarga actual o cancélala."},"network":{"title":"Error de red","body":"Revisa tu conexión e inténtalo de nuevo."},"disk_full":{"title":"No hay suficiente espacio en disco","body":"Libera espacio e inténtalo de nuevo."},"model_corrupt":{"title":"El archivo del modelo está dañado","body":"Elimínalo de la lista de modelos y descárgalo de nuevo."},"model_not_ready":{"title":"Modelo no descargado","body":"Descarga este modo de calidad antes de procesar."},"model_unknown":{"title":"Modelo desconocido","body":"Elige un modo de calidad de la lista."},"oom":{"title":"Sin memoria","body":"Prueba con una imagen más pequeña o cambia a CPU en Ajustes."},"gpu":{"title":"Problema de GPU","body":"Revisa los controladores o cambia a CPU en Ajustes."},"image_unreadable":{"title":"No se pudo leer esa imagen","body":"Prueba con otro archivo (PNG, JPG, WEBP o BMP)."},"output_failed":{"title":"No se pudo guardar el resultado","body":"Revisa los permisos de la carpeta de salida."},"config":{"title":"No se pudieron actualizar los ajustes"},"dialog":{"title":"No se pudo abrir el diálogo de archivos"},"inference_failed":{"title":"El procesamiento falló","body":"Inténtalo de nuevo. Si sigue fallando, cambia el modo de calidad o el EP."},"unknown":{"title":"Algo salió mal"},"cancelled":{"title":"Cancelado"},"fallback":{"title":"Terminado en CPU","body":"La GPU se quedó sin memoria ({{from}} → {{to}}). Los ajustes siguen usando la GPU en las próximas ejecuciones."},"firstRunGpu":{"title":"No se pudo completar la configuración de GPU","body":"Usando CPU. Puedes volver a ejecutar el benchmark en Ajustes."},"modelsUnavailable":{"title":"No se pudo cargar la lista de modelos","body":"Descarga un modo de calidad cuando cargue la lista. Prueba reiniciar la app."},"downloadCancelUnconfirmed":{"title":"No se pudo confirmar la cancelación","body":"La descarga puede seguir terminando en segundo plano."},"revealFailed":{"title":"No se pudo mostrar el archivo en la carpeta","body":"Comprueba que la ruta de salida aún exista."},"updateAvailable":{"title":"Actualización {{version}} disponible","body":"Abre Ajustes para instalar y reiniciar."},"upToDate":{"title":"Estás al día","body":"No se encontró una versión estable más reciente."},"updateCheckFailed":{"title":"No se pudo buscar actualizaciones","body":"Revisa tu conexión e inténtalo de nuevo."},"updateInstallFailed":{"title":"No se pudo instalar la actualización","body":"Inténtalo de nuevo o descarga el instalador desde GitHub Releases."},"updateUnavailable":{"body":"Las actualizaciones solo están disponibles en la app de escritorio."},"ensureDirFailed":{"title":"No se pudo crear la carpeta de salida"}},"queue":{"replaceLive":"¿Reemplazar la cola actual? Se cancelará el trabajo pendiente.","replaceIdle":"¿Reemplazar la cola actual con esta carpeta?","couldNotReadFolder":"No se pudo leer la carpeta","noImagesInFolder":{"title":"No hay imágenes en esta carpeta","body":"Solo se escanean PNG, JPG, WEBP y BMP del nivel superior (se ignoran las subcarpetas)."},"enqueueConfirm":"¿Encolar {{count}} imágenes?","couldNotOpenFolder":"No se pudo abrir la carpeta","dropEither":{"title":"Suelta imágenes o una sola carpeta","bodyMixed":"No se admiten soltar mezclas ni varias carpetas.","bodyMixedFiles":"No se admiten soltar mezclas."},"noImagesDropped":{"title":"No se soltaron imágenes","body":"Suelta archivos PNG, JPG, WEBP o BMP, o una carpeta."},"alreadyInQueue":{"title":"Ya están en la cola","body":"Esas imágenes ya están en la lista."},"leaveLive":"¿Salir de la cola? Se cancelará el trabajo pendiente y se vaciará la cola.","leaveIdle":"¿Salir de la cola y abrir una sola imagen? Se vaciará la cola.","stopAndClear":"¿Detener el procesamiento y vaciar la cola?"},"overwrite":{"singleAsk":"{{path}} ya existe. ¿Sobrescribir?","batchTitle":"Las salidas ya existen","batchBody_one":"Ya existe {{count}} archivo de salida.","batchBody_other":"Ya existen {{count}} archivos de salida.","overwriteAll":"Sobrescribir todo","skipExisting":"Omitir existentes"},"ncLicense":{"title":"Licencia no comercial","summary":"Balanced+ y Max Quality usan modelos bajo CC BY-NC 4.0. Puedes usar las salidas solo para uso personal o no comercial — no para trabajo remunerado, entregables a clientes, fotografía de producto u otros fines comerciales.","commercialHint":"Para uso comercial, elige Balanced o High, u obtén una licencia aparte del titular de derechos del modelo (BRIA).","licenseLabel":"CC BY-NC 4.0","accept":"Entiendo","cancel":"Cancelar"},"settings":{"theme":"Tema","themeSystem":"Sistema","themeLight":"Claro","themeDark":"Oscuro","executionProvider":"Proveedor de ejecución","detectingProviders":"Detectando proveedores…","epLockedTitle":"El proveedor de ejecución está bloqueado mientras corre la cola","benchmark":"Benchmark","benchmarkRunning":"Ejecutando…","benchmarking":"Ejecutando benchmark…","benchmarkLockedTitle":"El benchmark está bloqueado mientras corre la cola","benchmarkTitle":"Mide cada EP disponible y elige el más rápido","lockedWhileQueue":"Bloqueado mientras corre la cola","outputDirectory":"Carpeta de salida","resetOutputDirAria":"Restablecer carpeta de salida a la misma del origen","resetOutputDirTitle":"Usar la misma carpeta que cada archivo de entrada","sameAsInput":"Misma que la entrada","sameAsInputDefault":"Misma que la entrada (predeterminado)","changeOutputDirAria":"Cambiar carpeta de salida (actual: {{path}})","chooseOutputDirAria":"Elegir carpeta de salida","updates":"Actualizaciones","checkForUpdates":"Buscar actualizaciones","checking":"Buscando…","installAndRestart":"Instalar y reiniciar","installConfirm":"¿Descargar e instalar SwiftMask {{version}}? La app se reiniciará al terminar.","installTitle":"Instalar actualización","pillStable":"Estable","pillChecking":"Buscando…","pillCurrent":"Actual","pillReady":"Lista","pillDownloading":"Descargando…","pillRestarting":"Reiniciando…","pillFailed":"Falló","subLooking":"Buscando una versión estable más reciente…","subOnVersionLatest":"Estás en {{version}} · última estable","subLatestStable":"Estás en la última versión estable.","subReadyToInstall":"Lista para instalar","subYoureOn":"Estás en {{version}}","subDownloadingVersion":"Descargando {{version}}…","subDownloadingUpdate":"Descargando actualización…","subInstallingRestarting":"Instalando y reiniciando…","subCheckFailed":"No se pudo buscar actualizaciones. Inténtalo de nuevo.","subOnVersionChannel":"Estás en {{version}} · canal estable","subStableChannel":"Canal estable","downloadingPercent":"Descargando… {{percent}}%","gpu":"GPU: {{vendor}}","vram":"VRAM: {{value}}","vramUnknown":"Desconocida","eps":"EPs: {{list}}","opt":"Opt: {{value}}","lastJob":"Último trabajo","total":"total: {{value}}","aboutAndLicenses":"Acerca de y licencias"},"about":{"appName":"SwiftMask","versionLine":"SwiftMask {{version}}","ortLine":"ONNX Runtime {{version}}","mit":"SwiftMask es de código abierto bajo la","mitLicense":"Licencia MIT","mitRest":". Eso cubre la aplicación en sí. Los modelos ONNX son obras de terceros con sus propios términos (ver abajo).","modelsHeading":"Modelos","colMode":"Modo","colModel":"Modelo","colLicense":"Licencia","ncFootnote":"{{modes}} son CC BY-NC 4.0 (no comercial). El uso personal está bien; el uso comercial requiere una licencia aparte del titular de derechos del modelo.","github":"GitHub","issues":"Issues"},"fileBlock":{"noImage":"Sin imagen","selectOrOpen":"Selecciona o abre una carpeta","folderSession":"Sesión de carpeta","watching":"Observando · solo nivel superior","imagesInQueue_one":"{{count}} imagen en cola","imagesInQueue_other":"{{count}} imágenes en cola","dropMore":"Suelta más para añadir","singleImage":"Imagen individual","watch":"Observar","removeImage":"Quitar imagen","selectImage":"Seleccionar imagen","selectImageTitle":"Seleccionar imagen (Ctrl+O)","openFolder":"Abrir carpeta…","openFolderTitle":"Abrir carpeta (Ctrl+Shift+O)"},"imagePanel":{"nothingToProcess":"Nada que procesar","showInFolder":"Mostrar en carpeta","process":"Procesar","processAll":"Procesar todo","reRun":"Reprocesar","processTitle":"Procesar (Ctrl+Enter)","processPendingTitle":"Procesar pendientes (Ctrl+Enter)","cancelTitle":"Cancelar (Esc)","queueRunningStatus":"{{done}}/{{total}} · {{name}} · {{stage}}","queueIdleStatus":"{{total}} en cola · {{pending}} pendientes","queueIdleStatusWithFailed":"{{total}} en cola · {{pending}} pendientes · {{failed}} fallidos","statusWithError":"{{status}}: {{error}}"},"modeSelector":{"qualityMode":"Modo de calidad","nonCommercial":"No comercial","commercialOk":"Comercial OK","downloadRequired":"{{name}} — descarga requerida","modeTitle":"{{name}} ({{id}}) — {{size}}px","notDownloadedAria":"{{name}} (no descargado)","model":"Modelo","license":"Licencia","download":"Descargar"},"download":{"downloading":"Descargando {{modelName}}","verifying":"Verificando {{modelName}}","cancelling":"Cancelando {{modelName}}…","cancellingStatus":"Cancelando…","verifyingStatus":"Verificando…"},"queueDrawer":{"queue":"Cola","noSelection":"Sin selección","pillFailed":"{{done}}/{{total}} · {{failed}} fallidos","pillRunning":"{{done}}/{{total}} · en curso","pillPending":"{{done}}/{{total}} · pendiente","actionsAria":"Acciones de la cola","clearCompleted":"Limpiar completados","clearFailed":"Limpiar fallidos","clearPending":"Limpiar pendientes","retryFailed":"Reintentar fallidos","clearAll":"Limpiar todo…","openOutputs":"Abrir salidas","collapse":"Contraer cola","expand":"Expandir cola","imagesCount_one":"{{count}} imagen","imagesCount_other":"{{count}} imágenes","imagesCountWithFailed_one":"{{count}} imagen · {{failed}} fallidos","imagesCountWithFailed_other":"{{count}} imágenes · {{failed}} fallidos","itemsAria":"Elementos de la cola","retry":"Reintentar","retryAria":"Reintentar {{name}}","showInFolder":"Mostrar en carpeta","showInFolderAria":"Mostrar {{name}} en carpeta","removeFromQueue":"Quitar de la cola","removeAria":"Quitar {{name}}","processingSub":"{{name}} · {{progress}}%"},"preview":{"dropToStart":"Suelta imágenes o una carpeta para iniciar una cola","dropNow":"Suelta imágenes o una carpeta","formats":"PNG, JPG, WEBP, BMP","hint":"Seleccionar imagen · Ctrl+O · Abrir carpeta · Ctrl+Shift+O","before":"Antes","after":"Después","compareAria":"Comparación antes y después","inputAlt":"Entrada"},"titleBar":{"settings":"Ajustes","minimize":"Minimizar","maximize":"Maximizar","restore":"Restaurar","close":"Cerrar"},"app":{"loadingModels":"Cargando modelos…","loadingModelsAria":"Cargando modelos","detectingAcceleration":"Detectando la mejor aceleración…","preview":"Vista previa","back":"Atrás","about":"Acerca de","settings":"Ajustes","closeAbout":"Cerrar acerca de","closeSettings":"Cerrar ajustes","quitTitle":"Salir de SwiftMask","quitBody":"La cola tiene trabajo sin terminar. ¿Cancelar la cola y salir?","logoAria":"SwiftMask"},"finish":{"finishedWithCounts":"Terminado: {{succeeded}} correctos, {{failed}} fallidos","fallbackSuffix":"{{succeeded}} correctos, {{failed}} fallidos."},"notice":{"dismiss":"Descartar aviso"}};
+
+function flatten(obj, prefix = "", out = []) {
+  for (const [k, v] of Object.entries(obj)) {
+    const path = prefix ? prefix + "." + k : k;
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) flatten(v, path, out);
+    else out.push({ key: path, section: path.split(".")[0], en: String(v ?? ""), es: "" });
+  }
+  return out;
+}
+
+function getPath(obj, path) {
+  return path.split(".").reduce((a, k) => (a == null ? undefined : a[k]), obj);
+}
+
+function tokens(s) {
+  const m = String(s).match(/\{\{[^}]+\}\}/g);
+  return m ? m.slice().sort() : [];
+}
+
+function tokensMatch(a, b) {
+  const ta = tokens(a), tb = tokens(b);
+  if (ta.length !== tb.length) return false;
+  for (let i = 0; i < ta.length; i++) if (ta[i] !== tb[i]) return false;
+  return true;
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const rows = flatten(EN).map((r) => {
+  const esVal = getPath(ES, r.key);
+  r.es = esVal == null ? "" : String(esVal);
+  r.same = r.en === r.es;
+  r.tokenMismatch = !tokensMatch(r.en, r.es);
+  return r;
+});
+
+const bySection = new Map();
+for (const r of rows) {
+  if (!bySection.has(r.section)) bySection.set(r.section, []);
+  bySection.get(r.section).push(r);
+}
+
+const totalEl = document.getElementById("total");
+const shownEl = document.getElementById("shown");
+const sameCountEl = document.getElementById("sameCount");
+const tokenCountEl = document.getElementById("tokenCount");
+const main = document.getElementById("main");
+const qEl = document.getElementById("q");
+const hideSameEl = document.getElementById("hideSame");
+
+totalEl.textContent = String(rows.length);
+sameCountEl.textContent = String(rows.filter((r) => r.same).length);
+tokenCountEl.textContent = String(rows.filter((r) => r.tokenMismatch).length);
+
+function render() {
+  const q = qEl.value.trim().toLowerCase();
+  const hideSame = hideSameEl.checked;
+  let shown = 0;
+  const parts = [];
+
+  for (const [section, items] of bySection) {
+    const filtered = items.filter((r) => {
+      if (hideSame && r.same) return false;
+      if (!q) return true;
+      return (
+        r.key.toLowerCase().includes(q) ||
+        r.en.toLowerCase().includes(q) ||
+        r.es.toLowerCase().includes(q)
+      );
+    });
+    if (!filtered.length) continue;
+    shown += filtered.length;
+    parts.push(
+      `<section class="section" data-section="${esc(section)}">` +
+        `<div class="section-head"><span>${esc(section)}</span><span>${filtered.length}</span></div>` +
+        filtered
+          .map((r) => {
+            const cls = ["card"];
+            if (r.same) cls.push("flag-same");
+            if (r.tokenMismatch) cls.push("flag-token");
+            let badges = "";
+            if (r.same || r.tokenMismatch) {
+              badges =
+                `<div class="badges">` +
+                (r.same ? `<span class="badge same">same as EN</span>` : "") +
+                (r.tokenMismatch ? `<span class="badge token">token mismatch</span>` : "") +
+                `</div>`;
+            }
+            return (
+              `<article class="${cls.join(" ")}">` +
+              `<div class="key">${esc(r.key)}</div>` +
+              badges +
+              `<div class="langs">` +
+              `<div class="lang"><div class="lang-label">EN</div><div class="lang-val${r.en ? "" : " empty"}">${r.en ? esc(r.en) : "—"}</div></div>` +
+              `<div class="lang"><div class="lang-label">ES</div><div class="lang-val${r.es ? "" : " empty"}">${r.es ? esc(r.es) : "—"}</div></div>` +
+              `</div></article>`
+            );
+          })
+          .join("") +
+        `</section>`
+    );
+  }
+
+  shownEl.textContent = String(shown);
+  main.innerHTML = parts.length
+    ? parts.join("")
+    : `<p class="empty-state">No keys match.</p>`;
+}
+
+qEl.addEventListener("input", render);
+hideSameEl.addEventListener("change", render);
+render();
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import i18n from "../i18n";
 import { uiStore } from "../stores/uiStore";
 
 vi.mock("./desktopNotify", () => ({
@@ -11,7 +12,8 @@ import { showFinishNotice } from "./finishNotice";
 const desktopNotifyMock = vi.mocked(maybeDesktopNotifyQueueFinished);
 
 describe("showFinishNotice", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     uiStore.getState().dismissNotice();
     desktopNotifyMock.mockClear();
   });

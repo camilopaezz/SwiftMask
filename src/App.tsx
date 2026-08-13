@@ -2,6 +2,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { exit } from "@tauri-apps/plugin-process";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import appLogoSvg from "./assets/app-logo.svg?raw";
 import { AboutPanel } from "./components/AboutPanel";
 import { AppNotice } from "./components/AppNotice";
@@ -13,6 +14,7 @@ import { PreviewCanvas } from "./components/PreviewCanvas";
 import { QueueDrawer } from "./components/QueueDrawer";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TitleBar } from "./components/TitleBar";
+import i18n from "./i18n";
 import { initCurrentImageListeners, syncOutputPath } from "./lib/currentImage";
 import {
   formatFirstRunGpuDegradeNotice,
@@ -56,6 +58,7 @@ import "./App.css";
 type SettingsShellView = "settings" | "about";
 
 function App() {
+  const { t } = useTranslation();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsView, setSettingsView] =
     useState<SettingsShellView>("settings");
@@ -405,10 +408,10 @@ function App() {
 
           // Async confirm — hold the close until the user decides.
           event.preventDefault();
-          const ok = await ask(
-            "Queue has unfinished work. Cancel the queue and quit?",
-            { title: "Quit SwiftMask", kind: "warning" },
-          );
+          const ok = await ask(i18n.t("app.quitBody"), {
+            title: i18n.t("app.quitTitle"),
+            kind: "warning",
+          });
           if (!ok) return;
 
           try {
@@ -484,7 +487,7 @@ function App() {
       {/* U14: first-run acceleration detector only — not a generic cold-start splash. */}
       {firstRun && (
         <div className="fullscreen-blocker" role="status">
-          Detecting best acceleration…
+          {t("app.detectingAcceleration")}
         </div>
       )}
 
@@ -493,9 +496,9 @@ function App() {
           className="fullscreen-blocker"
           role="status"
           aria-busy="true"
-          aria-label="Loading models"
+          aria-label={t("app.loadingModelsAria")}
         >
-          Loading models…
+          {t("app.loadingModels")}
         </div>
       )}
 
@@ -518,7 +521,11 @@ function App() {
               onMouseDown={onWindowDragMouseDown}
               onDoubleClick={onWindowDragDoubleClick}
             >
-              <InlineSvg svg={appLogoSvg} role="img" aria-label="SwiftMask" />
+              <InlineSvg
+                svg={appLogoSvg}
+                role="img"
+                aria-label={t("app.logoAria")}
+              />
             </div>
 
             {/* Scrollable controls; footer stays pinned so Process/Cancel survive short tiles. */}
@@ -539,7 +546,7 @@ function App() {
 
           <section
             className={`app-preview${queueActive ? " has-queue-drawer" : ""}`}
-            aria-label="Preview"
+            aria-label={t("app.preview")}
           >
             <PreviewCanvas
               inputPath={previewInputPath}
@@ -574,7 +581,7 @@ function App() {
                       ref={aboutBackRef}
                       type="button"
                       className={`modal-back${settingsView === "about" ? " is-visible" : ""}`}
-                      aria-label="Back"
+                      aria-label={t("app.back")}
                       aria-hidden={settingsView !== "about"}
                       tabIndex={settingsView === "about" ? undefined : -1}
                       onClick={backToSettings}
@@ -582,7 +589,9 @@ function App() {
                       ←
                     </button>
                     <h2 id="settings-shell-title" className="modal-title">
-                      {settingsView === "about" ? "About" : "Settings"}
+                      {settingsView === "about"
+                        ? t("app.about")
+                        : t("app.settings")}
                     </h2>
                   </div>
                   <button
@@ -591,8 +600,8 @@ function App() {
                     className="modal-close"
                     aria-label={
                       settingsView === "about"
-                        ? "Close about"
-                        : "Close settings"
+                        ? t("app.closeAbout")
+                        : t("app.closeSettings")
                     }
                     onClick={closeSettingsShell}
                   >

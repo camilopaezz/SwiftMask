@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 export type DownloadModalProps = {
   open: boolean;
   modelName: string;
@@ -15,16 +17,18 @@ export function DownloadModal({
   cancelling,
   onCancel,
 }: DownloadModalProps) {
+  const { t } = useTranslation();
+
   const title = cancelling
-    ? `Cancelling ${modelName}…`
+    ? t("download.cancelling", { modelName })
     : stage === "verify"
-      ? `Verifying ${modelName}`
-      : `Downloading ${modelName}`;
+      ? t("download.verifying", { modelName })
+      : t("download.downloading", { modelName });
 
   const status = cancelling
-    ? "Cancelling…"
+    ? t("download.cancellingStatus")
     : stage === "verify"
-      ? "Verifying…"
+      ? t("download.verifyingStatus")
       : `${Math.round(progress)}%`;
 
   return (
@@ -44,7 +48,7 @@ export function DownloadModal({
           disabled={cancelling}
           aria-disabled={cancelling}
         >
-          {cancelling ? "Cancelling…" : "Cancel"}
+          {cancelling ? t("download.cancellingStatus") : t("common.cancel")}
         </button>
       </div>
     </div>
