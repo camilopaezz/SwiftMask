@@ -120,9 +120,7 @@ async function confirmReplaceIfNeeded(
     isQueueRunActive() ||
     q.items.some((i) => i.status === "processing");
   const ok = await askConfirm(
-    live
-      ? i18n.t("queue.replaceLive")
-      : i18n.t("queue.replaceIdle"),
+    live ? i18n.t("queue.replaceLive") : i18n.t("queue.replaceIdle"),
   );
   if (!ok) return false;
   await endQueueSession();
@@ -322,9 +320,7 @@ export async function loadSingleImage(
       isQueueRunActive() ||
       q.items.some((i) => i.status === "processing");
     const ok = await deps.askConfirm(
-      live
-        ? i18n.t("queue.leaveLive")
-        : i18n.t("queue.leaveIdle"),
+      live ? i18n.t("queue.leaveLive") : i18n.t("queue.leaveIdle"),
     );
     if (!ok) return false;
     await endQueueSession();

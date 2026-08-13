@@ -230,10 +230,10 @@ export function SettingsPanel({
       return;
     }
     const version = updateVersion ?? pendingUpdate.version;
-    const confirmed = await ask(
-      t("settings.installConfirm", { version }),
-      { title: t("settings.installTitle"), kind: "info" },
-    );
+    const confirmed = await ask(t("settings.installConfirm", { version }), {
+      title: t("settings.installTitle"),
+      kind: "info",
+    });
     if (!confirmed) return;
 
     setUpdateStatus("downloading");
@@ -380,9 +380,7 @@ export function SettingsPanel({
                   className="settings-ep-chip"
                   aria-pressed={ep === epOption}
                   disabled={epLocked}
-                  title={
-                    epLocked ? t("settings.epLockedTitle") : undefined
-                  }
+                  title={epLocked ? t("settings.epLockedTitle") : undefined}
                   onClick={() => void handleEpChange(epOption)}
                 >
                   {epLabel(epOption)}
@@ -414,9 +412,7 @@ export function SettingsPanel({
                 <path d="M12.5 2.5v2.8H9.7M3.5 13.5v-2.8h2.8" />
               </svg>
             </span>
-            {loading
-              ? t("settings.benchmarkRunning")
-              : t("settings.benchmark")}
+            {loading ? t("settings.benchmarkRunning") : t("settings.benchmark")}
           </button>
         </div>
         {loading ? (

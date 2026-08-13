@@ -54,7 +54,9 @@ export function ModeSelector() {
 
   return (
     <div className="mode-selector">
-      <h3 className="app-rail-section-title">{t("modeSelector.qualityMode")}</h3>
+      <h3 className="app-rail-section-title">
+        {t("modeSelector.qualityMode")}
+      </h3>
 
       <div
         className="mode-seg"

@@ -102,9 +102,7 @@ export function TitleBar({
           />
         </WindowButton>
         <WindowButton
-          label={
-            maximized ? t("titleBar.restore") : t("titleBar.maximize")
-          }
+          label={maximized ? t("titleBar.restore") : t("titleBar.maximize")}
           onClick={() =>
             void withWindow(async (win) => {
               await win.toggleMaximize();
