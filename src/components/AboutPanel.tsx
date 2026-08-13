@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { APP_LINKS, licenseUrlFor } from "../lib/licenseUrls";
 import { MODEL_REGISTRY } from "../lib/models.generated";
 import { isNonCommercialModel } from "../lib/ncLicense";
@@ -11,6 +12,7 @@ export type AboutPanelProps = {
 };
 
 export function AboutPanel({ visible }: AboutPanelProps) {
+  const { t } = useTranslation();
   const runtimeInfo = useSettingsStore((s) => s.runtimeInfo);
   const setRuntimeInfo = useSettingsStore((s) => s.setRuntimeInfo);
 
@@ -37,27 +39,28 @@ export function AboutPanel({ visible }: AboutPanelProps) {
   return (
     <div className="about-panel" aria-hidden={!visible} inert={!visible}>
       <div className="about-identity">
-        <div className="about-app-name">SwiftMask</div>
+        <div className="about-app-name">{t("about.appName")}</div>
         <div className="about-versions">
-          <div>SwiftMask {appVersion}</div>
-          <div>ONNX Runtime {ortVersion}</div>
+          <div>{t("about.versionLine", { version: appVersion })}</div>
+          <div>{t("about.ortLine", { version: ortVersion })}</div>
         </div>
       </div>
 
       <p className="about-mit">
-        SwiftMask is open source under the{" "}
-        <ExternalLinkButton url={APP_LINKS.mit}>MIT License</ExternalLinkButton>
-        . That covers the application itself. The ONNX models are third-party
-        works with their own terms (see below).
+        {t("about.mit")}{" "}
+        <ExternalLinkButton url={APP_LINKS.mit}>
+          {t("about.mitLicense")}
+        </ExternalLinkButton>
+        {t("about.mitRest")}
       </p>
 
-      <div className="about-models-heading">Models</div>
+      <div className="about-models-heading">{t("about.modelsHeading")}</div>
       <table className="about-models-table">
         <thead>
           <tr>
-            <th scope="col">Mode</th>
-            <th scope="col">Model</th>
-            <th scope="col">License</th>
+            <th scope="col">{t("about.colMode")}</th>
+            <th scope="col">{t("about.colModel")}</th>
+            <th scope="col">{t("about.colLicense")}</th>
           </tr>
         </thead>
         <tbody>
@@ -86,16 +89,18 @@ export function AboutPanel({ visible }: AboutPanelProps) {
 
       {ncModeNames.length > 0 && (
         <p className="about-nc-footnote">
-          {ncModeNames} are CC BY-NC 4.0 (non-commercial). Personal use is fine;
-          commercial use requires a separate license from the model rights
-          holder.
+          {t("about.ncFootnote", { modes: ncModeNames })}
         </p>
       )}
 
       <div className="about-links">
-        <ExternalLinkButton url={APP_LINKS.repo}>GitHub</ExternalLinkButton>
+        <ExternalLinkButton url={APP_LINKS.repo}>
+          {t("about.github")}
+        </ExternalLinkButton>
         <span aria-hidden="true"> · </span>
-        <ExternalLinkButton url={APP_LINKS.issues}>Issues</ExternalLinkButton>
+        <ExternalLinkButton url={APP_LINKS.issues}>
+          {t("about.issues")}
+        </ExternalLinkButton>
       </div>
     </div>
   );

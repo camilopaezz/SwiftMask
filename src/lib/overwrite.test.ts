@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import i18n from "../i18n";
 import { shouldProceedWithOverwrite } from "./overwrite";
 
 describe("shouldProceedWithOverwrite", () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
   it("proceeds when output does not exist", async () => {
     const exists = vi.fn().mockResolvedValue(false);
     const ask = vi.fn();
@@ -23,7 +28,9 @@ describe("shouldProceedWithOverwrite", () => {
       ask,
     );
     expect(result).toBe(true);
-    expect(ask).toHaveBeenCalledWith("/tmp/out.png already exists. Overwrite?");
+    expect(ask).toHaveBeenCalledWith(
+      i18n.t("overwrite.singleAsk", { path: "/tmp/out.png" }),
+    );
   });
 
   it("skips when output exists and user declines", async () => {

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { type NoticeSeverity, useUiStore } from "../stores/uiStore";
 
 const AUTO_DISMISS_MS: Record<NoticeSeverity, number | null> = {
@@ -12,6 +13,7 @@ const AUTO_DISMISS_MS: Record<NoticeSeverity, number | null> = {
  * Info/warning auto-dismiss (paused while hovered); errors stick until dismissed.
  */
 export function AppNotice() {
+  const { t } = useTranslation();
   const notice = useUiStore((s) => s.notice);
   const dismissNotice = useUiStore((s) => s.dismissNotice);
   const hoveredRef = useRef(false);
@@ -102,7 +104,7 @@ export function AppNotice() {
       <button
         type="button"
         className="app-notice-dismiss"
-        aria-label="Dismiss notice"
+        aria-label={t("notice.dismiss")}
         onClick={() => dismissNotice()}
       >
         ✕

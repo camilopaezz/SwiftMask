@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { formatError } from "../lib/errorCopy";
 import {
   isModelReady,
@@ -21,14 +22,8 @@ const MODE_SEG_LABEL: Partial<Record<ModelMode, string>> = {
   "rmbg-2.0": "Max",
 };
 
-function licenseLabel(model: ModelMeta): { text: string; nc: boolean } {
-  if (isNonCommercialModel(model)) {
-    return { text: "Non-commercial", nc: true };
-  }
-  return { text: "Commercial OK", nc: false };
-}
-
 export function ModeSelector() {
+  const { t } = useTranslation();
   const mode = useSettingsStore((state) => state.mode);
   const setMode = useSettingsStore((state) => state.setMode);
   // Catalog is loaded once in App bootstrap and refreshed after download/cancel.
@@ -42,7 +37,11 @@ export function ModeSelector() {
   const selected =
     visibleModels.find((m) => m.id === mode) ?? visibleModels[0] ?? null;
   const selectedReady = selected ? isModelReady(selected) : false;
-  const selectedLicense = selected ? licenseLabel(selected) : null;
+  const selectedLicense = selected
+    ? isNonCommercialModel(selected)
+      ? { text: t("modeSelector.nonCommercial"), nc: true }
+      : { text: t("modeSelector.commercialOk"), nc: false }
+    : null;
 
   const handleSelect = (model: ModelMeta) => {
     if (download.isBusy || modeLocked) return;
@@ -55,9 +54,13 @@ export function ModeSelector() {
 
   return (
     <div className="mode-selector">
-      <h3 className="app-rail-section-title">Quality mode</h3>
+      <h3 className="app-rail-section-title">{t("modeSelector.qualityMode")}</h3>
 
-      <div className="mode-seg" role="radiogroup" aria-label="Quality mode">
+      <div
+        className="mode-seg"
+        role="radiogroup"
+        aria-label={t("modeSelector.qualityMode")}
+      >
         {visibleModels.map((model) => {
           const active = mode === model.id;
           const available = isModelReady(model);
@@ -68,8 +71,12 @@ export function ModeSelector() {
               className={`mode-seg-btn${active ? " is-active" : ""}${available ? "" : " is-undownloaded"}`}
               title={
                 available
-                  ? `${model.name} (${model.id}) — ${model.input_size}px`
-                  : `${model.name} — download required`
+                  ? t("modeSelector.modeTitle", {
+                      name: model.name,
+                      id: model.id,
+                      size: model.input_size,
+                    })
+                  : t("modeSelector.downloadRequired", { name: model.name })
               }
               data-mode={model.id}
             >
@@ -80,7 +87,9 @@ export function ModeSelector() {
                 checked={active}
                 disabled={modeLocked || download.isBusy}
                 aria-label={
-                  available ? model.name : `${model.name} (not downloaded)`
+                  available
+                    ? model.name
+                    : t("modeSelector.notDownloadedAria", { name: model.name })
                 }
                 onChange={() => handleSelect(model)}
               />
@@ -97,11 +106,11 @@ export function ModeSelector() {
         >
           <strong className="mode-detail-name">{selected.name}</strong>
           <div className="mode-detail-row">
-            <span>Model</span>
+            <span>{t("modeSelector.model")}</span>
             <b className="mode-detail-model">{selected.id}</b>
           </div>
           <div className="mode-detail-row">
-            <span>License</span>
+            <span>{t("modeSelector.license")}</span>
             <span
               className={
                 selectedLicense?.nc
@@ -119,7 +128,7 @@ export function ModeSelector() {
               disabled={download.isBusy || modeLocked}
               onClick={() => download.startDownload(selected)}
             >
-              Download
+              {t("modeSelector.download")}
             </button>
           )}
         </div>
@@ -175,10 +184,10 @@ export function ModeSelector() {
               className="btn-primary"
               onClick={download.handleDownloadRetry}
             >
-              Retry
+              {t("common.retry")}
             </button>
             <button type="button" onClick={download.handleDownloadErrorDismiss}>
-              Dismiss
+              {t("common.dismiss")}
             </button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import alertIcon from "../assets/icons/queue/alert.svg?raw";
 import checkIcon from "../assets/icons/queue/check.svg?raw";
 import externalLinkIcon from "../assets/icons/queue/external-link.svg?raw";
@@ -54,6 +55,7 @@ function rowTitle(item: QueueItem): string {
 }
 
 export function QueueDrawer() {
+  const { t } = useTranslation();
   const items = useQueueStore((s) => s.items);
   const selectedId = useQueueStore((s) => s.selectedId);
   const pinnedId = useQueueStore((s) => s.pinnedId);
@@ -91,14 +93,14 @@ export function QueueDrawer() {
   const preview = items.find((i) => i.id === previewId);
   const summaryName = preview
     ? fileNameFromPath(preview.inputPath)
-    : "No selection";
+    : t("queueDrawer.noSelection");
 
   const pill =
     failed > 0
-      ? `${done}/${total} · ${failed} failed`
+      ? t("queueDrawer.pillFailed", { done, total, failed })
       : running
-        ? `${done}/${total} · running`
-        : `${done}/${total} · pending`;
+        ? t("queueDrawer.pillRunning", { done, total })
+        : t("queueDrawer.pillPending", { done, total });
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -107,7 +109,7 @@ export function QueueDrawer() {
       <button
         type="button"
         className="btn-icon queue-overflow-btn"
-        aria-label="Queue actions"
+        aria-label={t("queueDrawer.actionsAria")}
         aria-expanded={menuOpen}
         aria-haspopup="menu"
         onClick={(e) => {
@@ -127,7 +129,7 @@ export function QueueDrawer() {
               queueStore.getState().clearByStatus("done");
             }}
           >
-            Clear completed
+            {t("queueDrawer.clearCompleted")}
           </button>
           <button
             type="button"
@@ -137,7 +139,7 @@ export function QueueDrawer() {
               queueStore.getState().clearByStatus("failed");
             }}
           >
-            Clear failed
+            {t("queueDrawer.clearFailed")}
           </button>
           <button
             type="button"
@@ -148,7 +150,7 @@ export function QueueDrawer() {
               queueStore.getState().clearByStatus("pending");
             }}
           >
-            Clear pending
+            {t("queueDrawer.clearPending")}
           </button>
           {failed > 0 && (
             <button
@@ -160,7 +162,7 @@ export function QueueDrawer() {
                 queueStore.getState().retryAllFailed();
               }}
             >
-              Retry failed
+              {t("queueDrawer.retryFailed")}
             </button>
           )}
           <button
@@ -171,7 +173,7 @@ export function QueueDrawer() {
               void clearQueue();
             }}
           >
-            Clear all…
+            {t("queueDrawer.clearAll")}
           </button>
           {source?.kind === "folder" && (
             <button
@@ -182,7 +184,7 @@ export function QueueDrawer() {
                 void revealPath(source.outputDir);
               }}
             >
-              Open outputs
+              {t("queueDrawer.openOutputs")}
             </button>
           )}
         </div>
@@ -197,7 +199,9 @@ export function QueueDrawer() {
           type="button"
           className="queue-drawer-toggle"
           aria-expanded={drawerOpen}
-          title={drawerOpen ? "Collapse queue" : "Expand queue"}
+          title={
+            drawerOpen ? t("queueDrawer.collapse") : t("queueDrawer.expand")
+          }
           onClick={() => toggleDrawer()}
         >
           <span className="queue-drawer-chev" aria-hidden>
@@ -205,7 +209,9 @@ export function QueueDrawer() {
           </span>
           <span className="queue-drawer-summary">
             <span className="queue-drawer-title-row">
-              <span className="queue-drawer-title">Queue</span>
+              <span className="queue-drawer-title">
+                {t("queueDrawer.queue")}
+              </span>
               <span
                 className={`queue-drawer-pill${failed > 0 ? " is-error" : ""}${running ? " is-live" : ""}`}
               >
@@ -214,7 +220,10 @@ export function QueueDrawer() {
             </span>
             <span className="queue-drawer-sub">
               {processing
-                ? `${fileNameFromPath(processing.inputPath)} · ${processing.progress}%`
+                ? t("queueDrawer.processingSub", {
+                    name: fileNameFromPath(processing.inputPath),
+                    progress: processing.progress,
+                  })
                 : summaryName}
             </span>
           </span>
@@ -231,13 +240,18 @@ export function QueueDrawer() {
         <div className="queue-drawer-body">
           <div className="queue-list-header">
             <span className="queue-list-count">
-              {total} image{total === 1 ? "" : "s"}
-              {failed > 0 ? ` · ${failed} failed` : ""}
+              {failed > 0
+                ? t("queueDrawer.imagesCountWithFailed", {
+                    count: total,
+                    failed,
+                  })
+                : t("queueDrawer.imagesCount", { count: total })}
             </span>
           </div>
-          <ul className="queue-list" aria-label="Queue items">
+          <ul className="queue-list" aria-label={t("queueDrawer.itemsAria")}>
             {items.map((item) => {
               const selectedRow = item.id === selectedId;
+              const name = fileNameFromPath(item.inputPath);
               return (
                 <li key={item.id}>
                   <div
@@ -256,16 +270,14 @@ export function QueueDrawer() {
                       >
                         <StatusMark item={item} />
                       </span>
-                      <span className="queue-name">
-                        {fileNameFromPath(item.inputPath)}
-                      </span>
+                      <span className="queue-name">{name}</span>
                     </button>
                     {item.status === "failed" && (
                       <button
                         type="button"
                         className="queue-row-retry btn-ghost"
-                        title="Retry"
-                        aria-label={`Retry ${fileNameFromPath(item.inputPath)}`}
+                        title={t("queueDrawer.retry")}
+                        aria-label={t("queueDrawer.retryAria", { name })}
                         disabled={running}
                         tabIndex={drawerOpen ? 0 : -1}
                         onClick={() =>
@@ -283,8 +295,10 @@ export function QueueDrawer() {
                       <button
                         type="button"
                         className="queue-row-reveal btn-ghost"
-                        title="Show in folder"
-                        aria-label={`Show ${fileNameFromPath(item.outputPath)} in folder`}
+                        title={t("queueDrawer.showInFolder")}
+                        aria-label={t("queueDrawer.showInFolderAria", {
+                          name: fileNameFromPath(item.outputPath),
+                        })}
                         tabIndex={drawerOpen ? 0 : -1}
                         onClick={() => {
                           void revealPath(item.outputPath);
@@ -301,8 +315,8 @@ export function QueueDrawer() {
                       <button
                         type="button"
                         className="queue-row-remove btn-ghost"
-                        title="Remove from queue"
-                        aria-label={`Remove ${fileNameFromPath(item.inputPath)}`}
+                        title={t("queueDrawer.removeFromQueue")}
+                        aria-label={t("queueDrawer.removeAria", { name })}
                         tabIndex={drawerOpen ? 0 : -1}
                         onClick={() => removeQueueItem(item.id)}
                       >

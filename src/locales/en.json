@@ -1,0 +1,365 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "remove": "Remove",
+    "reset": "Reset",
+    "browse": "Browse…",
+    "yes": "Yes",
+    "no": "No",
+    "dismiss": "Dismiss",
+    "retry": "Retry",
+    "back": "Back"
+  },
+  "stages": {
+    "processing": "Processing",
+    "decoding": "decoding",
+    "preprocessing": "preprocessing",
+    "inferring": "inferring",
+    "inferringCpu": "inferring-cpu",
+    "postprocessing": "postprocessing",
+    "encoding": "encoding"
+  },
+  "status": {
+    "ready": "Ready",
+    "done": "Done",
+    "error": "Error",
+    "cancelled": "Cancelled",
+    "cancelling": "Cancelling…",
+    "starting": "Starting…",
+    "running": "running",
+    "pending": "pending",
+    "failed": "failed"
+  },
+  "errors": {
+    "busy": {
+      "title": "Already processing",
+      "body": "Wait for the current job to finish or cancel it."
+    },
+    "download_busy": {
+      "title": "Download already in progress",
+      "body": "Wait for the current download to finish or cancel it."
+    },
+    "network": {
+      "title": "Network error",
+      "body": "Check your connection and try again."
+    },
+    "disk_full": {
+      "title": "Not enough disk space",
+      "body": "Free some space and try again."
+    },
+    "model_corrupt": {
+      "title": "Model file is damaged",
+      "body": "Delete it from the model list and download again."
+    },
+    "model_not_ready": {
+      "title": "Model not downloaded",
+      "body": "Download this quality mode before processing."
+    },
+    "model_unknown": {
+      "title": "Unknown model",
+      "body": "Pick a quality mode from the list."
+    },
+    "oom": {
+      "title": "Out of memory",
+      "body": "Try a smaller image or switch to CPU in Settings."
+    },
+    "gpu": {
+      "title": "GPU problem",
+      "body": "Check drivers or switch to CPU in Settings."
+    },
+    "image_unreadable": {
+      "title": "Couldn’t read that image",
+      "body": "Try another file (PNG, JPG, WEBP, or BMP)."
+    },
+    "output_failed": {
+      "title": "Couldn’t save the result",
+      "body": "Check the output folder permissions."
+    },
+    "config": {
+      "title": "Couldn’t update settings"
+    },
+    "dialog": {
+      "title": "Couldn’t open the file dialog"
+    },
+    "inference_failed": {
+      "title": "Processing failed",
+      "body": "Try again. If it keeps failing, switch quality mode or EP."
+    },
+    "unknown": {
+      "title": "Something went wrong"
+    },
+    "cancelled": {
+      "title": "Cancelled"
+    },
+    "fallback": {
+      "title": "Finished on CPU",
+      "body": "GPU ran out of memory ({{from}} → {{to}}). Settings still use your GPU for next runs."
+    },
+    "firstRunGpu": {
+      "title": "Couldn't finish GPU setup",
+      "body": "Using CPU. You can re-run the benchmark in Settings."
+    },
+    "modelsUnavailable": {
+      "title": "Couldn't load model list",
+      "body": "Download a quality mode after the list loads. Try restarting the app."
+    },
+    "downloadCancelUnconfirmed": {
+      "title": "Couldn't confirm cancel",
+      "body": "The download may still finish in the background."
+    },
+    "revealFailed": {
+      "title": "Couldn't show file in folder",
+      "body": "Check that the output path still exists."
+    },
+    "updateAvailable": {
+      "title": "Update {{version}} available",
+      "body": "Open Settings to install and restart."
+    },
+    "upToDate": {
+      "title": "You're up to date",
+      "body": "No newer stable release was found."
+    },
+    "updateCheckFailed": {
+      "title": "Couldn't check for updates",
+      "body": "Check your connection and try again."
+    },
+    "updateInstallFailed": {
+      "title": "Couldn't install the update",
+      "body": "Try again, or download the installer from GitHub Releases."
+    },
+    "updateUnavailable": {
+      "body": "Updates are only available in the desktop app."
+    },
+    "ensureDirFailed": {
+      "title": "Could not create output folder"
+    }
+  },
+  "queue": {
+    "replaceLive": "Replace the current queue? Pending work will be cancelled.",
+    "replaceIdle": "Replace the current queue with this folder?",
+    "couldNotReadFolder": "Could not read folder",
+    "noImagesInFolder": {
+      "title": "No images in this folder",
+      "body": "Only top-level PNG, JPG, WEBP, BMP are scanned (subfolders are ignored)."
+    },
+    "enqueueConfirm": "Enqueue {{count}} images?",
+    "couldNotOpenFolder": "Could not open folder",
+    "dropEither": {
+      "title": "Drop either images or one folder",
+      "bodyMixed": "Mixed drops and multi-folder drops are not supported.",
+      "bodyMixedFiles": "Mixed drops are not supported."
+    },
+    "noImagesDropped": {
+      "title": "No images dropped",
+      "body": "Drop PNG, JPG, WEBP, or BMP files, or one folder."
+    },
+    "alreadyInQueue": {
+      "title": "Already in queue",
+      "body": "Those images are already listed."
+    },
+    "leaveLive": "Leave the queue? Pending work will be cancelled and the queue cleared.",
+    "leaveIdle": "Leave the queue and open a single image? The queue will be cleared.",
+    "stopAndClear": "Stop processing and clear the queue?"
+  },
+  "overwrite": {
+    "singleAsk": "{{path}} already exists. Overwrite?",
+    "batchTitle": "Outputs already exist",
+    "batchBody_one": "{{count}} output file already exist.",
+    "batchBody_other": "{{count}} output files already exist.",
+    "overwriteAll": "Overwrite all",
+    "skipExisting": "Skip existing"
+  },
+  "ncLicense": {
+    "title": "Non-commercial license",
+    "summary": "Balanced+ and Max Quality use models under CC BY-NC 4.0. You may use outputs for personal or non-commercial work only — not for paid work, client deliverables, product photography, or other commercial purposes.",
+    "commercialHint": "For commercial use, choose Balanced or High, or obtain a separate license from the model rights holder (BRIA).",
+    "licenseLabel": "CC BY-NC 4.0",
+    "accept": "I understand",
+    "cancel": "Cancel"
+  },
+  "settings": {
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "executionProvider": "Execution provider",
+    "detectingProviders": "Detecting providers…",
+    "epLockedTitle": "Execution provider is locked while the queue is running",
+    "benchmark": "Benchmark",
+    "benchmarkRunning": "Running…",
+    "benchmarking": "Benchmarking…",
+    "benchmarkLockedTitle": "Benchmark is locked while the queue is running",
+    "benchmarkTitle": "Time each available EP and select the fastest",
+    "lockedWhileQueue": "Locked while the queue is running",
+    "outputDirectory": "Output directory",
+    "resetOutputDirAria": "Reset output directory to same as input",
+    "resetOutputDirTitle": "Use same folder as each input file",
+    "sameAsInput": "Same as input",
+    "sameAsInputDefault": "Same as input (default)",
+    "changeOutputDirAria": "Change output directory (current: {{path}})",
+    "chooseOutputDirAria": "Choose output directory",
+    "updates": "Updates",
+    "checkForUpdates": "Check for updates",
+    "checking": "Checking…",
+    "installAndRestart": "Install and restart",
+    "installConfirm": "Download and install SwiftMask {{version}}? The app will restart when finished.",
+    "installTitle": "Install update",
+    "pillStable": "Stable",
+    "pillChecking": "Checking…",
+    "pillCurrent": "Current",
+    "pillReady": "Ready",
+    "pillDownloading": "Downloading…",
+    "pillRestarting": "Restarting…",
+    "pillFailed": "Failed",
+    "subLooking": "Looking for a newer stable release…",
+    "subOnVersionLatest": "You're on {{version}} · latest stable",
+    "subLatestStable": "You're on the latest stable release.",
+    "subReadyToInstall": "Ready to install",
+    "subYoureOn": "You're on {{version}}",
+    "subDownloadingVersion": "Downloading {{version}}…",
+    "subDownloadingUpdate": "Downloading update…",
+    "subInstallingRestarting": "Installing and restarting…",
+    "subCheckFailed": "Couldn't check for updates. Try again.",
+    "subOnVersionChannel": "You're on {{version}} · stable channel",
+    "subStableChannel": "Stable channel",
+    "downloadingPercent": "Downloading… {{percent}}%",
+    "gpu": "GPU: {{vendor}}",
+    "vram": "VRAM: {{value}}",
+    "vramUnknown": "Unknown",
+    "eps": "EPs: {{list}}",
+    "opt": "Opt: {{value}}",
+    "lastJob": "Last job",
+    "total": "total: {{value}}",
+    "aboutAndLicenses": "About & licenses"
+  },
+  "about": {
+    "appName": "SwiftMask",
+    "versionLine": "SwiftMask {{version}}",
+    "ortLine": "ONNX Runtime {{version}}",
+    "mit": "SwiftMask is open source under the",
+    "mitLicense": "MIT License",
+    "mitRest": ". That covers the application itself. The ONNX models are third-party works with their own terms (see below).",
+    "modelsHeading": "Models",
+    "colMode": "Mode",
+    "colModel": "Model",
+    "colLicense": "License",
+    "ncFootnote": "{{modes}} are CC BY-NC 4.0 (non-commercial). Personal use is fine; commercial use requires a separate license from the model rights holder.",
+    "github": "GitHub",
+    "issues": "Issues"
+  },
+  "fileBlock": {
+    "noImage": "No image",
+    "selectOrOpen": "Select or open a folder",
+    "folderSession": "Folder session",
+    "watching": "Watching · top-level only",
+    "imagesInQueue_one": "{{count}} image in queue",
+    "imagesInQueue_other": "{{count}} images in queue",
+    "dropMore": "Drop more to append",
+    "singleImage": "Single image",
+    "watch": "Watch",
+    "removeImage": "Remove image",
+    "selectImage": "Select image",
+    "selectImageTitle": "Select image (Ctrl+O)",
+    "openFolder": "Open folder…",
+    "openFolderTitle": "Open folder (Ctrl+Shift+O)"
+  },
+  "imagePanel": {
+    "nothingToProcess": "Nothing to process",
+    "showInFolder": "Show in folder",
+    "process": "Process",
+    "processAll": "Process All",
+    "reRun": "Re-run",
+    "processTitle": "Process (Ctrl+Enter)",
+    "processPendingTitle": "Process pending (Ctrl+Enter)",
+    "cancelTitle": "Cancel (Esc)",
+    "queueRunningStatus": "{{done}}/{{total}} · {{name}} · {{stage}}",
+    "queueIdleStatus": "{{total}} in queue · {{pending}} pending",
+    "queueIdleStatusWithFailed": "{{total}} in queue · {{pending}} pending · {{failed}} failed",
+    "statusWithError": "{{status}}: {{error}}"
+  },
+  "modeSelector": {
+    "qualityMode": "Quality mode",
+    "nonCommercial": "Non-commercial",
+    "commercialOk": "Commercial OK",
+    "downloadRequired": "{{name}} — download required",
+    "modeTitle": "{{name}} ({{id}}) — {{size}}px",
+    "notDownloadedAria": "{{name}} (not downloaded)",
+    "model": "Model",
+    "license": "License",
+    "download": "Download"
+  },
+  "download": {
+    "downloading": "Downloading {{modelName}}",
+    "verifying": "Verifying {{modelName}}",
+    "cancelling": "Cancelling {{modelName}}…",
+    "cancellingStatus": "Cancelling…",
+    "verifyingStatus": "Verifying…"
+  },
+  "queueDrawer": {
+    "queue": "Queue",
+    "noSelection": "No selection",
+    "pillFailed": "{{done}}/{{total}} · {{failed}} failed",
+    "pillRunning": "{{done}}/{{total}} · running",
+    "pillPending": "{{done}}/{{total}} · pending",
+    "actionsAria": "Queue actions",
+    "clearCompleted": "Clear completed",
+    "clearFailed": "Clear failed",
+    "clearPending": "Clear pending",
+    "retryFailed": "Retry failed",
+    "clearAll": "Clear all…",
+    "openOutputs": "Open outputs",
+    "collapse": "Collapse queue",
+    "expand": "Expand queue",
+    "imagesCount_one": "{{count}} image",
+    "imagesCount_other": "{{count}} images",
+    "imagesCountWithFailed_one": "{{count}} image · {{failed}} failed",
+    "imagesCountWithFailed_other": "{{count}} images · {{failed}} failed",
+    "itemsAria": "Queue items",
+    "retry": "Retry",
+    "retryAria": "Retry {{name}}",
+    "showInFolder": "Show in folder",
+    "showInFolderAria": "Show {{name}} in folder",
+    "removeFromQueue": "Remove from queue",
+    "removeAria": "Remove {{name}}",
+    "processingSub": "{{name}} · {{progress}}%"
+  },
+  "preview": {
+    "dropToStart": "Drop images or a folder to start a queue",
+    "dropNow": "Drop images or a folder",
+    "formats": "PNG, JPG, WEBP, BMP",
+    "hint": "Select image · Ctrl+O · Open folder · Ctrl+Shift+O",
+    "before": "Before",
+    "after": "After",
+    "compareAria": "Before and after comparison",
+    "inputAlt": "Input"
+  },
+  "titleBar": {
+    "settings": "Settings",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
+  "app": {
+    "loadingModels": "Loading models…",
+    "loadingModelsAria": "Loading models",
+    "detectingAcceleration": "Detecting best acceleration…",
+    "preview": "Preview",
+    "back": "Back",
+    "about": "About",
+    "settings": "Settings",
+    "closeAbout": "Close about",
+    "closeSettings": "Close settings",
+    "quitTitle": "Quit SwiftMask",
+    "quitBody": "Queue has unfinished work. Cancel the queue and quit?",
+    "logoAria": "SwiftMask"
+  },
+  "finish": {
+    "finishedWithCounts": "Finished: {{succeeded}} succeeded, {{failed}} failed",
+    "fallbackSuffix": "{{succeeded}} succeeded, {{failed}} failed."
+  },
+  "notice": {
+    "dismiss": "Dismiss notice"
+  }
+}

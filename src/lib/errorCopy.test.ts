@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import i18n from "../i18n";
 import {
   formatError,
   formatFallbackNotice,
   sanitizeTechnicalMessage,
 } from "./errorCopy";
+
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
+});
 
 describe("formatError", () => {
   it("maps known codes to titles", () => {

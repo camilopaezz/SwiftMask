@@ -1,0 +1,365 @@
+{
+  "common": {
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "remove": "Quitar",
+    "reset": "Restablecer",
+    "browse": "Examinar…",
+    "yes": "Sí",
+    "no": "No",
+    "dismiss": "Cerrar",
+    "retry": "Reintentar",
+    "back": "Atrás"
+  },
+  "stages": {
+    "processing": "Procesando",
+    "decoding": "decodificando",
+    "preprocessing": "preprocesando",
+    "inferring": "infiriendo",
+    "inferringCpu": "infiriendo-cpu",
+    "postprocessing": "posprocesando",
+    "encoding": "codificando"
+  },
+  "status": {
+    "ready": "Listo",
+    "done": "Completado",
+    "error": "Error",
+    "cancelled": "Cancelado",
+    "cancelling": "Cancelando…",
+    "starting": "Iniciando…",
+    "running": "en curso",
+    "pending": "pendiente",
+    "failed": "fallidos"
+  },
+  "errors": {
+    "busy": {
+      "title": "Ya se está procesando",
+      "body": "Espera a que termine el trabajo actual o cancélalo."
+    },
+    "download_busy": {
+      "title": "Ya hay una descarga en curso",
+      "body": "Espera a que termine la descarga actual o cancélala."
+    },
+    "network": {
+      "title": "Error de red",
+      "body": "Revisa tu conexión e inténtalo de nuevo."
+    },
+    "disk_full": {
+      "title": "No hay suficiente espacio en disco",
+      "body": "Libera espacio e inténtalo de nuevo."
+    },
+    "model_corrupt": {
+      "title": "El archivo del modelo está dañado",
+      "body": "Elimínalo de la lista de modelos y descárgalo de nuevo."
+    },
+    "model_not_ready": {
+      "title": "Modelo no descargado",
+      "body": "Descarga este modo de calidad antes de procesar."
+    },
+    "model_unknown": {
+      "title": "Modelo desconocido",
+      "body": "Elige un modo de calidad de la lista."
+    },
+    "oom": {
+      "title": "Sin memoria",
+      "body": "Prueba con una imagen más pequeña o cambia a CPU en Ajustes."
+    },
+    "gpu": {
+      "title": "Problema de GPU",
+      "body": "Revisa los controladores o cambia a CPU en Ajustes."
+    },
+    "image_unreadable": {
+      "title": "No se pudo leer esa imagen",
+      "body": "Prueba con otro archivo (PNG, JPG, WEBP o BMP)."
+    },
+    "output_failed": {
+      "title": "No se pudo guardar el resultado",
+      "body": "Revisa los permisos de la carpeta de salida."
+    },
+    "config": {
+      "title": "No se pudieron actualizar los ajustes"
+    },
+    "dialog": {
+      "title": "No se pudo abrir el diálogo de archivos"
+    },
+    "inference_failed": {
+      "title": "El procesamiento falló",
+      "body": "Inténtalo de nuevo. Si sigue fallando, cambia el modo de calidad o el EP."
+    },
+    "unknown": {
+      "title": "Algo salió mal"
+    },
+    "cancelled": {
+      "title": "Cancelado"
+    },
+    "fallback": {
+      "title": "Terminado en CPU",
+      "body": "La GPU se quedó sin memoria ({{from}} → {{to}}). Los ajustes siguen usando la GPU en las próximas ejecuciones."
+    },
+    "firstRunGpu": {
+      "title": "No se pudo completar la configuración de GPU",
+      "body": "Usando CPU. Puedes volver a ejecutar el benchmark en Ajustes."
+    },
+    "modelsUnavailable": {
+      "title": "No se pudo cargar la lista de modelos",
+      "body": "Descarga un modo de calidad cuando cargue la lista. Prueba reiniciar la app."
+    },
+    "downloadCancelUnconfirmed": {
+      "title": "No se pudo confirmar la cancelación",
+      "body": "La descarga puede seguir terminando en segundo plano."
+    },
+    "revealFailed": {
+      "title": "No se pudo mostrar el archivo en la carpeta",
+      "body": "Comprueba que la ruta de salida aún exista."
+    },
+    "updateAvailable": {
+      "title": "Actualización {{version}} disponible",
+      "body": "Abre Ajustes para instalar y reiniciar."
+    },
+    "upToDate": {
+      "title": "Estás al día",
+      "body": "No se encontró una versión estable más reciente."
+    },
+    "updateCheckFailed": {
+      "title": "No se pudo buscar actualizaciones",
+      "body": "Revisa tu conexión e inténtalo de nuevo."
+    },
+    "updateInstallFailed": {
+      "title": "No se pudo instalar la actualización",
+      "body": "Inténtalo de nuevo o descarga el instalador desde GitHub Releases."
+    },
+    "updateUnavailable": {
+      "body": "Las actualizaciones solo están disponibles en la app de escritorio."
+    },
+    "ensureDirFailed": {
+      "title": "No se pudo crear la carpeta de salida"
+    }
+  },
+  "queue": {
+    "replaceLive": "¿Reemplazar la cola actual? Se cancelará el trabajo pendiente.",
+    "replaceIdle": "¿Reemplazar la cola actual con esta carpeta?",
+    "couldNotReadFolder": "No se pudo leer la carpeta",
+    "noImagesInFolder": {
+      "title": "No hay imágenes en esta carpeta",
+      "body": "Solo se escanean PNG, JPG, WEBP y BMP del nivel superior (se ignoran las subcarpetas)."
+    },
+    "enqueueConfirm": "¿Encolar {{count}} imágenes?",
+    "couldNotOpenFolder": "No se pudo abrir la carpeta",
+    "dropEither": {
+      "title": "Suelta imágenes o una sola carpeta",
+      "bodyMixed": "No se admiten soltar mezclas ni varias carpetas.",
+      "bodyMixedFiles": "No se admiten soltar mezclas."
+    },
+    "noImagesDropped": {
+      "title": "No se soltaron imágenes",
+      "body": "Suelta archivos PNG, JPG, WEBP o BMP, o una carpeta."
+    },
+    "alreadyInQueue": {
+      "title": "Ya están en la cola",
+      "body": "Esas imágenes ya están en la lista."
+    },
+    "leaveLive": "¿Salir de la cola? Se cancelará el trabajo pendiente y se vaciará la cola.",
+    "leaveIdle": "¿Salir de la cola y abrir una sola imagen? Se vaciará la cola.",
+    "stopAndClear": "¿Detener el procesamiento y vaciar la cola?"
+  },
+  "overwrite": {
+    "singleAsk": "{{path}} ya existe. ¿Sobrescribir?",
+    "batchTitle": "Las salidas ya existen",
+    "batchBody_one": "Ya existe {{count}} archivo de salida.",
+    "batchBody_other": "Ya existen {{count}} archivos de salida.",
+    "overwriteAll": "Sobrescribir todo",
+    "skipExisting": "Omitir existentes"
+  },
+  "ncLicense": {
+    "title": "Licencia no comercial",
+    "summary": "Balanced+ y Max Quality usan modelos bajo CC BY-NC 4.0. Puedes usar las salidas solo para uso personal o no comercial — no para trabajo remunerado, entregables a clientes, fotografía de producto u otros fines comerciales.",
+    "commercialHint": "Para uso comercial, elige Balanced o High, u obtén una licencia aparte del titular de derechos del modelo (BRIA).",
+    "licenseLabel": "CC BY-NC 4.0",
+    "accept": "Entiendo",
+    "cancel": "Cancelar"
+  },
+  "settings": {
+    "theme": "Tema",
+    "themeSystem": "Sistema",
+    "themeLight": "Claro",
+    "themeDark": "Oscuro",
+    "executionProvider": "Proveedor de ejecución",
+    "detectingProviders": "Detectando proveedores…",
+    "epLockedTitle": "El proveedor de ejecución está bloqueado mientras corre la cola",
+    "benchmark": "Benchmark",
+    "benchmarkRunning": "Ejecutando…",
+    "benchmarking": "Ejecutando benchmark…",
+    "benchmarkLockedTitle": "El benchmark está bloqueado mientras corre la cola",
+    "benchmarkTitle": "Mide cada EP disponible y elige el más rápido",
+    "lockedWhileQueue": "Bloqueado mientras corre la cola",
+    "outputDirectory": "Carpeta de salida",
+    "resetOutputDirAria": "Restablecer carpeta de salida a la misma del origen",
+    "resetOutputDirTitle": "Usar la misma carpeta que cada archivo de entrada",
+    "sameAsInput": "Misma que la entrada",
+    "sameAsInputDefault": "Misma que la entrada (predeterminado)",
+    "changeOutputDirAria": "Cambiar carpeta de salida (actual: {{path}})",
+    "chooseOutputDirAria": "Elegir carpeta de salida",
+    "updates": "Actualizaciones",
+    "checkForUpdates": "Buscar actualizaciones",
+    "checking": "Buscando…",
+    "installAndRestart": "Instalar y reiniciar",
+    "installConfirm": "¿Descargar e instalar SwiftMask {{version}}? La app se reiniciará al terminar.",
+    "installTitle": "Instalar actualización",
+    "pillStable": "Estable",
+    "pillChecking": "Buscando…",
+    "pillCurrent": "Actual",
+    "pillReady": "Lista",
+    "pillDownloading": "Descargando…",
+    "pillRestarting": "Reiniciando…",
+    "pillFailed": "Falló",
+    "subLooking": "Buscando una versión estable más reciente…",
+    "subOnVersionLatest": "Estás en {{version}} · última estable",
+    "subLatestStable": "Estás en la última versión estable.",
+    "subReadyToInstall": "Lista para instalar",
+    "subYoureOn": "Estás en {{version}}",
+    "subDownloadingVersion": "Descargando {{version}}…",
+    "subDownloadingUpdate": "Descargando actualización…",
+    "subInstallingRestarting": "Instalando y reiniciando…",
+    "subCheckFailed": "No se pudo buscar actualizaciones. Inténtalo de nuevo.",
+    "subOnVersionChannel": "Estás en {{version}} · canal estable",
+    "subStableChannel": "Canal estable",
+    "downloadingPercent": "Descargando… {{percent}}%",
+    "gpu": "GPU: {{vendor}}",
+    "vram": "VRAM: {{value}}",
+    "vramUnknown": "Desconocida",
+    "eps": "EPs: {{list}}",
+    "opt": "Opt: {{value}}",
+    "lastJob": "Último trabajo",
+    "total": "total: {{value}}",
+    "aboutAndLicenses": "Acerca de y licencias"
+  },
+  "about": {
+    "appName": "SwiftMask",
+    "versionLine": "SwiftMask {{version}}",
+    "ortLine": "ONNX Runtime {{version}}",
+    "mit": "SwiftMask es de código abierto bajo la",
+    "mitLicense": "Licencia MIT",
+    "mitRest": ". Eso cubre la aplicación en sí. Los modelos ONNX son obras de terceros con sus propios términos (ver abajo).",
+    "modelsHeading": "Modelos",
+    "colMode": "Modo",
+    "colModel": "Modelo",
+    "colLicense": "Licencia",
+    "ncFootnote": "{{modes}} son CC BY-NC 4.0 (no comercial). El uso personal está bien; el uso comercial requiere una licencia aparte del titular de derechos del modelo.",
+    "github": "GitHub",
+    "issues": "Issues"
+  },
+  "fileBlock": {
+    "noImage": "Sin imagen",
+    "selectOrOpen": "Selecciona o abre una carpeta",
+    "folderSession": "Sesión de carpeta",
+    "watching": "Observando · solo nivel superior",
+    "imagesInQueue_one": "{{count}} imagen en cola",
+    "imagesInQueue_other": "{{count}} imágenes en cola",
+    "dropMore": "Suelta más para añadir",
+    "singleImage": "Imagen individual",
+    "watch": "Observar",
+    "removeImage": "Quitar imagen",
+    "selectImage": "Seleccionar imagen",
+    "selectImageTitle": "Seleccionar imagen (Ctrl+O)",
+    "openFolder": "Abrir carpeta…",
+    "openFolderTitle": "Abrir carpeta (Ctrl+Shift+O)"
+  },
+  "imagePanel": {
+    "nothingToProcess": "Nada que procesar",
+    "showInFolder": "Mostrar en carpeta",
+    "process": "Procesar",
+    "processAll": "Procesar todo",
+    "reRun": "Reprocesar",
+    "processTitle": "Procesar (Ctrl+Enter)",
+    "processPendingTitle": "Procesar pendientes (Ctrl+Enter)",
+    "cancelTitle": "Cancelar (Esc)",
+    "queueRunningStatus": "{{done}}/{{total}} · {{name}} · {{stage}}",
+    "queueIdleStatus": "{{total}} en cola · {{pending}} pendientes",
+    "queueIdleStatusWithFailed": "{{total}} en cola · {{pending}} pendientes · {{failed}} fallidos",
+    "statusWithError": "{{status}}: {{error}}"
+  },
+  "modeSelector": {
+    "qualityMode": "Modo de calidad",
+    "nonCommercial": "No comercial",
+    "commercialOk": "Comercial OK",
+    "downloadRequired": "{{name}} — descarga requerida",
+    "modeTitle": "{{name}} ({{id}}) — {{size}}px",
+    "notDownloadedAria": "{{name}} (no descargado)",
+    "model": "Modelo",
+    "license": "Licencia",
+    "download": "Descargar"
+  },
+  "download": {
+    "downloading": "Descargando {{modelName}}",
+    "verifying": "Verificando {{modelName}}",
+    "cancelling": "Cancelando {{modelName}}…",
+    "cancellingStatus": "Cancelando…",
+    "verifyingStatus": "Verificando…"
+  },
+  "queueDrawer": {
+    "queue": "Cola",
+    "noSelection": "Sin selección",
+    "pillFailed": "{{done}}/{{total}} · {{failed}} fallidos",
+    "pillRunning": "{{done}}/{{total}} · en curso",
+    "pillPending": "{{done}}/{{total}} · pendiente",
+    "actionsAria": "Acciones de la cola",
+    "clearCompleted": "Limpiar completados",
+    "clearFailed": "Limpiar fallidos",
+    "clearPending": "Limpiar pendientes",
+    "retryFailed": "Reintentar fallidos",
+    "clearAll": "Limpiar todo…",
+    "openOutputs": "Abrir salidas",
+    "collapse": "Contraer cola",
+    "expand": "Expandir cola",
+    "imagesCount_one": "{{count}} imagen",
+    "imagesCount_other": "{{count}} imágenes",
+    "imagesCountWithFailed_one": "{{count}} imagen · {{failed}} fallidos",
+    "imagesCountWithFailed_other": "{{count}} imágenes · {{failed}} fallidos",
+    "itemsAria": "Elementos de la cola",
+    "retry": "Reintentar",
+    "retryAria": "Reintentar {{name}}",
+    "showInFolder": "Mostrar en carpeta",
+    "showInFolderAria": "Mostrar {{name}} en carpeta",
+    "removeFromQueue": "Quitar de la cola",
+    "removeAria": "Quitar {{name}}",
+    "processingSub": "{{name}} · {{progress}}%"
+  },
+  "preview": {
+    "dropToStart": "Suelta imágenes o una carpeta para iniciar una cola",
+    "dropNow": "Suelta imágenes o una carpeta",
+    "formats": "PNG, JPG, WEBP, BMP",
+    "hint": "Seleccionar imagen · Ctrl+O · Abrir carpeta · Ctrl+Shift+O",
+    "before": "Antes",
+    "after": "Después",
+    "compareAria": "Comparación antes y después",
+    "inputAlt": "Entrada"
+  },
+  "titleBar": {
+    "settings": "Ajustes",
+    "minimize": "Minimizar",
+    "maximize": "Maximizar",
+    "restore": "Restaurar",
+    "close": "Cerrar"
+  },
+  "app": {
+    "loadingModels": "Cargando modelos…",
+    "loadingModelsAria": "Cargando modelos",
+    "detectingAcceleration": "Detectando la mejor aceleración…",
+    "preview": "Vista previa",
+    "back": "Atrás",
+    "about": "Acerca de",
+    "settings": "Ajustes",
+    "closeAbout": "Cerrar acerca de",
+    "closeSettings": "Cerrar ajustes",
+    "quitTitle": "Salir de SwiftMask",
+    "quitBody": "La cola tiene trabajo sin terminar. ¿Cancelar la cola y salir?",
+    "logoAria": "SwiftMask"
+  },
+  "finish": {
+    "finishedWithCounts": "Terminado: {{succeeded}} correctos, {{failed}} fallidos",
+    "fallbackSuffix": "{{succeeded}} correctos, {{failed}} fallidos."
+  },
+  "notice": {
+    "dismiss": "Descartar aviso"
+  }
+}

@@ -1,5 +1,6 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   cancelProcess,
   isProcessBusy,
@@ -14,26 +15,27 @@ import { showAppErrorNotice } from "../lib/showAppErrorNotice";
 import { type ImageItem, useImageStore } from "../stores/imageStore";
 import { fileNameFromPath, useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
-import { ProgressBar } from "./ProgressBar";
+import { ProgressBar, stageLabel } from "./ProgressBar";
 
-function statusLabel(item: ImageItem): string {
+function statusLabel(item: ImageItem, t: (key: string) => string): string {
   switch (item.status) {
     case "ready":
-      return "Ready";
+      return t("status.ready");
     case "processing":
-      return item.stage ?? "Processing";
+      return stageLabel(item.stage, t);
     case "done":
-      return "Done";
+      return t("status.done");
     case "error":
-      return "Error";
+      return t("status.error");
     case "cancelled":
-      return "Cancelled";
+      return t("status.cancelled");
     default:
       return item.status;
   }
 }
 
 export function ImagePanel() {
+  const { t } = useTranslation();
   const current = useImageStore((state) => state.current);
   const queueActive = useQueueStore((state) => state.active);
   const queueItems = useQueueStore((state) => state.items);
@@ -123,20 +125,39 @@ export function ImagePanel() {
   let statusText: string | null;
   if (queueActive) {
     if (queueRunning && processingItem) {
-      statusText = `${doneCount}/${queueItems.length} · ${fileNameFromPath(processingItem.inputPath)} · ${processingItem.stage ?? "processing"}`;
+      statusText = t("imagePanel.queueRunningStatus", {
+        done: doneCount,
+        total: queueItems.length,
+        name: fileNameFromPath(processingItem.inputPath),
+        stage: stageLabel(processingItem.stage, t),
+      });
     } else if (cancelling) {
-      statusText = "Cancelling…";
+      statusText = t("status.cancelling");
+    } else if (failedCount) {
+      statusText = t("imagePanel.queueIdleStatusWithFailed", {
+        total: queueItems.length,
+        pending: pendingCount,
+        failed: failedCount,
+      });
     } else {
-      statusText = `${queueItems.length} in queue · ${pendingCount} pending${failedCount ? ` · ${failedCount} failed` : ""}`;
+      statusText = t("imagePanel.queueIdleStatus", {
+        total: queueItems.length,
+        pending: pendingCount,
+      });
     }
   } else if (!current) {
-    statusText = "Nothing to process";
+    statusText = t("imagePanel.nothingToProcess");
   } else if (isProcessing) {
     statusText = null;
   } else if (cancelling) {
-    statusText = "Cancelling…";
+    statusText = t("status.cancelling");
+  } else if (errorTitle) {
+    statusText = t("imagePanel.statusWithError", {
+      status: statusLabel(current, t),
+      error: errorTitle,
+    });
   } else {
-    statusText = `${statusLabel(current)}${errorTitle ? `: ${errorTitle}` : ""}`;
+    statusText = statusLabel(current, t);
   }
 
   return (
@@ -162,7 +183,7 @@ export function ImagePanel() {
       <div className="image-panel-actions">
         {canShowInFolder && !showCancel && !queueActive && (
           <button type="button" onClick={() => void handleShowInFolder()}>
-            Show in folder
+            {t("imagePanel.showInFolder")}
           </button>
         )}
 
@@ -172,33 +193,33 @@ export function ImagePanel() {
             className="btn-primary"
             title={
               queueActive
-                ? "Process pending (Ctrl+Enter)"
-                : "Process (Ctrl+Enter)"
+                ? t("imagePanel.processPendingTitle")
+                : t("imagePanel.processTitle")
             }
             onClick={() => void handleProcess()}
             disabled={processDisabled}
             aria-disabled={processDisabled}
           >
             {starting
-              ? "Starting…"
+              ? t("status.starting")
               : queueActive
                 ? pendingCount > 0
-                  ? "Process All"
-                  : "Process"
+                  ? t("imagePanel.processAll")
+                  : t("imagePanel.process")
                 : isDone
-                  ? "Re-run"
-                  : "Process"}
+                  ? t("imagePanel.reRun")
+                  : t("imagePanel.process")}
           </button>
         ) : (
           <button
             type="button"
             className="btn-primary"
-            title="Cancel (Esc)"
+            title={t("imagePanel.cancelTitle")}
             onClick={handleCancel}
             disabled={cancelling}
             aria-disabled={cancelling}
           >
-            {cancelling ? "Cancelling…" : "Cancel"}
+            {cancelling ? t("status.cancelling") : t("common.cancel")}
           </button>
         )}
       </div>

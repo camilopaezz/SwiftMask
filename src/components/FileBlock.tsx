@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { clearCurrent, isProcessBusy } from "../lib/currentImage";
 import { setFolderWatch } from "../lib/folderWatch";
 import { openImageFile } from "../lib/openImage";
@@ -8,6 +9,7 @@ import { fileNameFromPath, useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
 
 export function FileBlock() {
+  const { t } = useTranslation();
   const current = useImageStore((state) => state.current);
   const queueActive = useQueueStore((state) => state.active);
   const queueItems = useQueueStore((state) => state.items);
@@ -33,8 +35,8 @@ export function FileBlock() {
     clearCurrent();
   };
 
-  let title = "No image";
-  let subtitle = "Select or open a folder";
+  let title = t("fileBlock.noImage");
+  let subtitle = t("fileBlock.selectOrOpen");
   let titleMuted = true;
   let titleAttr: string | undefined;
   let showWatch = false;
@@ -53,18 +55,20 @@ export function FileBlock() {
       showWatch = true;
       watchOn = source.watch;
       watchDisabled = busy && !source.watch;
-      subtitle = source.watch ? "Watching · top-level only" : "Folder session";
+      subtitle = source.watch
+        ? t("fileBlock.watching")
+        : t("fileBlock.folderSession");
     } else {
-      title = `${n} image${n === 1 ? "" : "s"} in queue`;
-      titleAttr = `${n} images in queue`;
-      subtitle = "Drop more to append";
+      title = t("fileBlock.imagesInQueue", { count: n });
+      titleAttr = t("fileBlock.imagesInQueue", { count: n });
+      subtitle = t("fileBlock.dropMore");
     }
   } else if (current) {
     emptyPrimary = false;
     titleMuted = false;
     title = fileNameFromPath(current.inputPath);
     titleAttr = current.inputPath;
-    subtitle = "Single image";
+    subtitle = t("fileBlock.singleImage");
     showRemove = true;
   }
 
@@ -94,19 +98,19 @@ export function FileBlock() {
             <span className="watch-toggle-track" aria-hidden>
               <span className="watch-toggle-thumb" />
             </span>
-            <span className="watch-toggle-label">Watch</span>
+            <span className="watch-toggle-label">{t("fileBlock.watch")}</span>
           </label>
         )}
         {showRemove && (
           <button
             type="button"
             className="file-block-remove btn-ghost"
-            title="Remove image"
-            aria-label="Remove image"
+            title={t("fileBlock.removeImage")}
+            aria-label={t("fileBlock.removeImage")}
             onClick={handleRemove}
             disabled={busy}
           >
-            Remove
+            {t("common.remove")}
           </button>
         )}
       </div>
@@ -115,19 +119,19 @@ export function FileBlock() {
         <button
           type="button"
           className={emptyPrimary ? "btn-primary" : undefined}
-          title="Select image (Ctrl+O)"
+          title={t("fileBlock.selectImageTitle")}
           onClick={() => void handleSelect()}
           disabled={busy}
         >
-          Select image
+          {t("fileBlock.selectImage")}
         </button>
         <button
           type="button"
-          title="Open folder (Ctrl+Shift+O)"
+          title={t("fileBlock.openFolderTitle")}
           onClick={() => void handleOpenFolder()}
           disabled={busy}
         >
-          Open folder…
+          {t("fileBlock.openFolder")}
         </button>
       </div>
     </div>

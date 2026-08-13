@@ -1,3 +1,4 @@
+import i18n from "../i18n";
 import { licenseUrlFor } from "./licenseUrls";
 import { isModelReady, type ModelMeta } from "./models";
 
@@ -41,14 +42,14 @@ export function needsNcLicenseAck(
 
 const NC_LICENSE_LABEL = "CC BY-NC 4.0";
 
-export const NC_LICENSE_MODAL_COPY = {
-  title: "Non-commercial license",
-  summary:
-    "Balanced+ and Max Quality use models under CC BY-NC 4.0. You may use outputs for personal or non-commercial work only — not for paid work, client deliverables, product photography, or other commercial purposes.",
-  commercialHint:
-    "For commercial use, choose Balanced or High, or obtain a separate license from the model rights holder (BRIA).",
-  licenseLabel: NC_LICENSE_LABEL,
-  licenseUrl: licenseUrlFor(NC_LICENSE_LABEL) ?? "",
-  acceptLabel: "I understand",
-  cancelLabel: "Cancel",
-} as const;
+export function getNcLicenseModalCopy() {
+  return {
+    title: i18n.t("ncLicense.title"),
+    summary: i18n.t("ncLicense.summary"),
+    commercialHint: i18n.t("ncLicense.commercialHint"),
+    licenseLabel: i18n.t("ncLicense.licenseLabel"),
+    licenseUrl: licenseUrlFor(NC_LICENSE_LABEL) ?? "",
+    acceptLabel: i18n.t("ncLicense.accept"),
+    cancelLabel: i18n.t("ncLicense.cancel"),
+  };
+}

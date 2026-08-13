@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import i18n from "../i18n";
 import { uiStore } from "../stores/uiStore";
 import { showAppErrorNotice, showAppNotice } from "./showAppErrorNotice";
 
 describe("showAppErrorNotice", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     uiStore.getState().dismissNotice();
   });
 
@@ -29,7 +31,8 @@ describe("showAppErrorNotice", () => {
 });
 
 describe("showAppNotice", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     uiStore.getState().dismissNotice();
   });
 

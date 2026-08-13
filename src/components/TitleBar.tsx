@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 import copyIcon from "../assets/icons/titlebar/copy.svg?raw";
 import minusIcon from "../assets/icons/titlebar/minus.svg?raw";
 // Vendored Lucide SVGs (ISC) — see src/assets/icons/titlebar/README.md
@@ -31,6 +32,7 @@ export function TitleBar({
   onOpenSettings,
   settingsButtonRef,
 }: TitleBarProps) {
+  const { t } = useTranslation();
   const [maximized, setMaximized] = useState(false);
 
   const refreshMaximized = useCallback(async () => {
@@ -78,8 +80,8 @@ export function TitleBar({
           ref={settingsButtonRef}
           type="button"
           className="btn-icon"
-          aria-label="Settings"
-          title="Settings"
+          aria-label={t("titleBar.settings")}
+          title={t("titleBar.settings")}
           onClick={onOpenSettings}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -90,7 +92,7 @@ export function TitleBar({
           />
         </button>
         <WindowButton
-          label="Minimize"
+          label={t("titleBar.minimize")}
           onClick={() => void withWindow((win) => win.minimize())}
         >
           <InlineSvg
@@ -100,7 +102,9 @@ export function TitleBar({
           />
         </WindowButton>
         <WindowButton
-          label={maximized ? "Restore" : "Maximize"}
+          label={
+            maximized ? t("titleBar.restore") : t("titleBar.maximize")
+          }
           onClick={() =>
             void withWindow(async (win) => {
               await win.toggleMaximize();
@@ -115,7 +119,7 @@ export function TitleBar({
           />
         </WindowButton>
         <WindowButton
-          label="Close"
+          label={t("titleBar.close")}
           className="titlebar-close"
           onClick={() => void withWindow((win) => win.close())}
         >

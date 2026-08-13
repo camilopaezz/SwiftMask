@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import i18n from "../i18n";
 import { licenseUrlFor } from "./licenseUrls";
 import type { ModelMeta } from "./models";
 import { MODEL_REGISTRY } from "./models.generated";
 import {
+  getNcLicenseModalCopy,
   hasNcLicenseAck,
   isNonCommercialModel,
   NC_LICENSE_ACK_KEY,
-  NC_LICENSE_MODAL_COPY,
   needsNcLicenseAck,
   setNcLicenseAck,
   shouldShowNcBadge,
@@ -122,13 +123,16 @@ describe("needsNcLicenseAck", () => {
   });
 });
 
-describe("NC_LICENSE_MODAL_COPY", () => {
+describe("getNcLicenseModalCopy", () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
   it("uses the shared CC BY-NC 4.0 license URL", () => {
-    expect(NC_LICENSE_MODAL_COPY.licenseLabel).toBe("CC BY-NC 4.0");
-    expect(NC_LICENSE_MODAL_COPY.licenseUrl).toBe(
-      licenseUrlFor("CC BY-NC 4.0"),
-    );
-    expect(NC_LICENSE_MODAL_COPY.licenseUrl).toBe(
+    const copy = getNcLicenseModalCopy();
+    expect(copy.licenseLabel).toBe(i18n.t("ncLicense.licenseLabel"));
+    expect(copy.licenseUrl).toBe(licenseUrlFor("CC BY-NC 4.0"));
+    expect(copy.licenseUrl).toBe(
       "https://creativecommons.org/licenses/by-nc/4.0/",
     );
   });

@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import i18n from "../i18n";
 import { uiStore } from "../stores/uiStore";
 import { AppNotice } from "./AppNotice";
 
@@ -22,7 +23,8 @@ function mount(): { container: HTMLDivElement; root: Root } {
 describe("AppNotice auto-dismiss", () => {
   let mounted: { container: HTMLDivElement; root: Root } | null = null;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     vi.useFakeTimers();
     uiStore.getState().dismissNotice();
   });
@@ -102,7 +104,7 @@ describe("AppNotice auto-dismiss", () => {
     ).toBeTruthy();
 
     const btn = mounted.container.querySelector(
-      'button[aria-label="Dismiss notice"]',
+      `button[aria-label="${i18n.t("notice.dismiss")}"]`,
     ) as HTMLButtonElement;
     act(() => {
       btn.click();
