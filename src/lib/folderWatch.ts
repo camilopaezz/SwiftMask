@@ -13,31 +13,9 @@ import {
   invokeWatchFolderStop,
   listenFolderReady,
 } from "./tauri";
+import { disarmWatchAutoRun, getWatchAutoRunGate } from "./watchAutoRun";
 
 let unsubReady: (() => void) | null = null;
-
-/**
- * Watch auto-run gate for the current folder session:
- * - idle: no full Process yet (or session reset) — enqueue only
- * - armed: auto-process watch arrivals when worker idle
- * - paused: user cancelled a run — enqueue only until Process again
- */
-type AutoRunGate = "idle" | "armed" | "paused";
-let autoRunGate: AutoRunGate = "idle";
-
-/** User cancelled a queue run — keep enqueueing, stop auto-start until Process. */
-export function pauseWatchAutoRun(): void {
-  if (autoRunGate === "armed") autoRunGate = "paused";
-}
-
-/** Manual Process that actually starts arms auto-run for subsequent watch arrivals. */
-export function armWatchAutoRun(): void {
-  autoRunGate = "armed";
-}
-
-export function disarmWatchAutoRun(): void {
-  autoRunGate = "idle";
-}
 
 export async function setFolderWatch(enabled: boolean): Promise<void> {
   const source = queueStore.getState().source;
@@ -57,9 +35,16 @@ export async function setFolderWatch(enabled: boolean): Promise<void> {
     return;
   }
   if (!unsubReady) {
-    unsubReady = await listenFolderReady((payload) => {
-      void onFolderReady(payload.path);
-    });
+    try {
+      unsubReady = await listenFolderReady((payload) => {
+        void onFolderReady(payload.path);
+      });
+    } catch (err) {
+      console.error("listen folder:ready failed", err);
+      await stopFolderWatch();
+      showAppErrorNotice(err, { code: "watch_listen_failed" });
+      return;
+    }
   }
   queueStore.getState().setWatch(true);
 }
@@ -100,7 +85,7 @@ async function onFolderReady(path: string): Promise<void> {
   // Spec §2.5: watch auto-run always overwrites (no dialog).
   // Auto-process only when armed (after first manual Process), and only
   // watch arrivals (not leftover open-folder pending).
-  if (autoRunGate !== "armed") return;
+  if (getWatchAutoRunGate() !== "armed") return;
   if (isQueueRunActive() || queueStore.getState().running) return;
 
   const base = prodQueueRunnerDeps();

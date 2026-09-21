@@ -8,6 +8,7 @@ import {
 } from "../stores/queueStore";
 import { uiStore } from "../stores/uiStore";
 import { isProcessBusy, type ProcessSettings } from "./currentImage";
+import { isImageFile } from "./imageExt";
 import {
   baseName,
   deriveFolderOutputDir,
@@ -16,6 +17,7 @@ import {
 } from "./path";
 import {
   cancelQueueProcess,
+  forceQueueIdle,
   isQueueRunActive,
   waitForQueueIdle,
 } from "./queueRunner";
@@ -25,18 +27,9 @@ import {
   invokePickFolder,
 } from "./tauri";
 
-const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "bmp"]);
-
 export const QUEUE_ENQUEUE_CONFIRM_THRESHOLD = 200;
 
-function getExtension(path: string): string {
-  const dot = path.lastIndexOf(".");
-  return dot >= 0 ? path.slice(dot + 1).toLowerCase() : "";
-}
-
-export function isImageFile(path: string): boolean {
-  return IMAGE_EXTENSIONS.has(getExtension(path));
-}
+export { isImageFile } from "./imageExt";
 
 function existingPathSet(): Set<string> {
   return new Set(
@@ -101,8 +94,7 @@ async function endQueueSession(): Promise<void> {
       await waitForQueueIdle(10_000);
     } catch {
       // Timeout / orphaned running flag: force idle so leave/clear can proceed.
-      queueStore.getState().setRunning(false);
-      queueStore.getState().setCancelRequested(false);
+      forceQueueIdle();
     }
   }
   const { stopFolderWatch } = await import("./folderWatch");

@@ -45,16 +45,21 @@ export function TitleBar({
 
   useEffect(() => {
     void refreshMaximized();
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     getCurrentWindow()
       .onResized(() => {
         void refreshMaximized();
       })
       .then((fn) => {
-        unlisten = fn;
+        if (cancelled) fn();
+        else unlisten = fn;
       })
       .catch(() => {});
-    return () => unlisten?.();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [refreshMaximized]);
 
   return (

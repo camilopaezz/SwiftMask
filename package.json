@@ -17,7 +17,8 @@
     "format:check": "biome format .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "typecheck:e2e": "tsc --project tsconfig.e2e.json"
+    "typecheck:e2e": "tsc --project tsconfig.e2e.json",
+    "typecheck:node": "tsc --project tsconfig.node.json --noEmit"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

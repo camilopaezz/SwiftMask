@@ -9,6 +9,7 @@ use crate::config::Config;
 use crate::error::AppError;
 use ndarray::Array4;
 
+use crate::download::DownloadState;
 use crate::events::{
     InferenceDonePayload, InferenceErrorPayload, InferenceFallbackPayload,
     InferenceProgressPayload, JobTimings, RuntimeInfo, INFERENCE_DONE, INFERENCE_ERROR,
@@ -16,7 +17,6 @@ use crate::events::{
 };
 use crate::gpu::{BenchmarkResult, GpuInfo};
 use crate::job::{JobDeps, JobSink, ProcessingJob};
-use crate::download::DownloadState;
 use crate::models::ModelMeta;
 use crate::processing::{ProcessingSlotGuard, ProcessingState};
 
@@ -108,7 +108,7 @@ pub async fn set_ep(app: AppHandle, ep: String) -> Result<(), AppError> {
     let mut config = crate::config::load_config(&app)?;
     config.execution_provider = Some(normalized);
     crate::config::save_config(&app, &config)?;
-    crate::inference::invalidate_all_sessions()?;
+    crate::inference::invalidate_all_sessions();
     Ok(())
 }
 
@@ -159,9 +159,8 @@ pub async fn remove_image_background(
             let app_for_ep = app_handle.clone();
             let app_for_ready = app_handle.clone();
             let app_for_load = app_handle.clone();
-            let execution_provider = || {
-                Ok(crate::config::load_config(&app_for_ep)?.execution_provider())
-            };
+            let execution_provider =
+                || Ok(crate::config::load_config(&app_for_ep)?.execution_provider());
             let model_is_ready = |model: &crate::models::ModelEntry| {
                 crate::models::model_is_cached(&app_for_ready, model)
             };
@@ -180,7 +179,7 @@ pub async fn remove_image_background(
                 crate::inference::with_session(
                     model_id,
                     ep,
-                    || load_model_bytes(&model),
+                    || load_model_bytes(model),
                     |session| crate::inference::run(session, tensor),
                 )
             };
@@ -199,14 +198,14 @@ pub async fn remove_image_background(
                 // sessions inside with_session; belt-and-suspenders here so a
                 // future error site that skips that still releases multi-GB.
                 if crate::inference::is_likely_oom(&err) {
-                    let _ = crate::inference::invalidate_all_sessions();
+                    crate::inference::invalidate_all_sessions();
                 }
             }
             Err(_) => {
                 // Panic can leave the ORT/DirectML session in a bad state with
                 // committed GPU/system memory. Destroy the cache so the idle
                 // process does not keep multi-GB around.
-                let _ = crate::inference::invalidate_all_sessions();
+                crate::inference::invalidate_all_sessions();
                 let _ = app_handle.emit(
                     INFERENCE_ERROR,
                     InferenceErrorPayload {
@@ -307,14 +306,8 @@ pub async fn get_runtime_info() -> Result<RuntimeInfo, AppError> {
     })
 }
 
-const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp"];
-
 fn is_image_filename(name: &str) -> bool {
-    let Some(dot) = name.rfind('.') else {
-        return false;
-    };
-    let ext = name[dot + 1..].to_ascii_lowercase();
-    IMAGE_EXTENSIONS.iter().any(|e| *e == ext)
+    crate::image_ext::is_image_filename(name)
 }
 
 /// Top-level image paths only (non-recursive). Hidden files skipped.

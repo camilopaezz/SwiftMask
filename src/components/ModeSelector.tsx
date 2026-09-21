@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { isUiLocked } from "../lib/busy";
 import { formatError } from "../lib/errorCopy";
 import {
   isModelReady,
@@ -7,9 +8,7 @@ import {
   type ModelMode,
 } from "../lib/models";
 import { isNonCommercialModel } from "../lib/ncLicense";
-import { isQueueRunActive } from "../lib/queueRunner";
 import { useModelDownload } from "../lib/useModelDownload";
-import { useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { DownloadModal } from "./DownloadModal";
 import { NcLicenseModal } from "./NcLicenseModal";
@@ -29,8 +28,7 @@ export function ModeSelector() {
   // Catalog is loaded once in App bootstrap and refreshed after download/cancel.
   const models = useSettingsStore((state) => state.models);
   const download = useModelDownload();
-  const queueRunning = useQueueStore((s) => s.running);
-  const modeLocked = queueRunning || isQueueRunActive();
+  const modeLocked = isUiLocked();
 
   // Turbo stays in the backend registry for EP benchmark only.
   const visibleModels = models.filter(isUserFacingModel);

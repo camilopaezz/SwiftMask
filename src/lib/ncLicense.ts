@@ -26,12 +26,6 @@ export function setNcLicenseAck(): void {
   }
 }
 
-export function shouldShowNcBadge(
-  model: Pick<ModelMeta, "license" | "bundled" | "downloaded">,
-): boolean {
-  return isNonCommercialModel(model) && isModelReady(model);
-}
-
 export function needsNcLicenseAck(
   model: Pick<ModelMeta, "license" | "bundled" | "downloaded">,
 ): boolean {

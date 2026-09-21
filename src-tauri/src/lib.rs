@@ -1,18 +1,19 @@
 pub mod commands;
 mod config;
+pub mod download;
 pub mod error;
 mod events;
 mod folder_watch;
+mod fs_util;
 mod gpu;
+mod image_ext;
 pub mod image_io;
 pub mod inference;
 pub mod job;
-pub mod download;
 pub mod models;
 pub mod pipeline;
 pub mod processing;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -22,7 +23,9 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(crate::processing::ProcessingState::new())
         .manage(crate::download::DownloadState::new())
-        .manage(std::sync::Arc::new(crate::folder_watch::FolderWatchState::new()))
+        .manage(std::sync::Arc::new(
+            crate::folder_watch::FolderWatchState::new(),
+        ))
         .invoke_handler(tauri::generate_handler![
             commands::detect_gpu,
             commands::run_benchmark,

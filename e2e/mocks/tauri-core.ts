@@ -89,7 +89,7 @@ export function invoke<T>(
     }
     case "get_runtime_info":
       return Promise.resolve({
-        app_version: "1.0.0",
+        app_version: "1.2.0",
         ort_version: "1.24",
       } as T);
     default:

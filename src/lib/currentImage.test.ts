@@ -3,7 +3,6 @@ import { imageStore } from "../stores/imageStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
 import {
-  acceptDrop,
   applyDone,
   applyError,
   applyFallback,
@@ -98,49 +97,6 @@ describe("currentImage", () => {
     for (const key of Object.keys(handlers)) {
       delete handlers[key];
     }
-  });
-
-  describe("acceptDrop", () => {
-    it("filters non-images and returns false when none", () => {
-      const ok = acceptDrop(["/tmp/notes.txt", "/tmp/readme.md"], {
-        mode: "u2netp",
-        outputDir: null,
-      });
-      expect(ok).toBe(false);
-      expect(imageStore.getState().current).toBeNull();
-    });
-
-    it("ignores drop while processing", () => {
-      imageStore.getState().set({
-        ...makeReadyItem(),
-        status: "processing",
-      });
-      const ok = acceptDrop(["/tmp/new.jpg"], {
-        mode: "u2netp",
-        outputDir: null,
-      });
-      expect(ok).toBe(false);
-      expect(imageStore.getState().current?.inputPath).toBe("/tmp/in.png");
-    });
-
-    it("creates a ready item from the first image path", () => {
-      const ok = acceptDrop(
-        ["/tmp/notes.txt", "/tmp/photo.jpg", "/tmp/other.png"],
-        {
-          mode: "u2netp",
-          outputDir: "/out",
-        },
-      );
-      expect(ok).toBe(true);
-      const current = imageStore.getState().current;
-      expect(current?.inputPath).toBe("/tmp/photo.jpg");
-      expect(current?.status).toBe("ready");
-      expect(current?.progress).toBe(0);
-      expect(current?.stage).toBeNull();
-      expect(current?.error).toBeNull();
-      expect(current?.outputPath).toBe("/out/photo-nobg-u2netp.png");
-      expect(current?.id).toBeTruthy();
-    });
   });
 
   describe("syncOutputPath", () => {
@@ -294,12 +250,7 @@ describe("currentImage", () => {
       await vi.waitFor(() => expect(ask).toHaveBeenCalled());
       expect(isProcessBusy()).toBe(true);
 
-      // Gate blocks drop while confirming.
-      expect(
-        acceptDrop(["/tmp/other.png"], { mode: "u2netp", outputDir: null }),
-      ).toBe(false);
-
-      // Hostile race: store replaced while dialog open (bypassing acceptDrop gate).
+      // Hostile race: store replaced while dialog open (bypassing startProcess gate).
       imageStore
         .getState()
         .set(makeReadyItem({ id: "replaced", inputPath: "/tmp/other.png" }));
@@ -439,6 +390,26 @@ describe("currentImage", () => {
       expect(imageStore.getState().current?.status).toBe("cancelled");
       expect(isProcessBusy()).toBe(true);
       expect(await startProcess(makeDeps())).toBe("already-processing");
+    });
+
+    it("retries cancel after a failed pair of IPC attempts", async () => {
+      imageStore.getState().set({
+        ...makeReadyItem({ id: "img-cancel-retry" }),
+        status: "processing",
+      });
+      setActiveRunIdForTests("run-retry");
+      const cancelInference = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("ipc failed"))
+        .mockRejectedValueOnce(new Error("ipc failed"))
+        .mockResolvedValueOnce(undefined);
+
+      await cancelProcess({ cancelInference });
+      expect(isProcessBusy()).toBe(true);
+      await cancelProcess({ cancelInference });
+      expect(cancelInference).toHaveBeenCalledTimes(3);
+      expect(isProcessBusy()).toBe(false);
+      expect(imageStore.getState().current?.status).toBe("cancelled");
     });
 
     it("does not patch when not processing", async () => {

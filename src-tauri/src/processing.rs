@@ -33,10 +33,7 @@ impl ProcessingState {
             return Err(AppError::Busy);
         }
         self.cancel.store(false, Ordering::SeqCst);
-        *self
-            .active_job_id
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(job_id.to_string());
+        *self.active_job_id.lock().unwrap_or_else(|e| e.into_inner()) = Some(job_id.to_string());
         Ok(())
     }
 
@@ -44,10 +41,7 @@ impl ProcessingState {
         // Clear job identity *before* freeing the slot so a waiter that
         // returns from `wait_until_idle` and immediately `try_acquire`s cannot
         // have its new `active_job_id` wiped by this release.
-        *self
-            .active_job_id
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = None;
+        *self.active_job_id.lock().unwrap_or_else(|e| e.into_inner()) = None;
         self.busy.store(false, Ordering::SeqCst);
         self.idle_notify.notify_waiters();
     }
@@ -62,10 +56,7 @@ impl ProcessingState {
     /// wait for idle). Returns `false` for stale ids so waiters do not block on
     /// an unrelated job.
     pub fn cancel_job(&self, job_id: &str) -> bool {
-        let active = self
-            .active_job_id
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let active = self.active_job_id.lock().unwrap_or_else(|e| e.into_inner());
         if active.as_deref() == Some(job_id) {
             self.cancel.store(true, Ordering::SeqCst);
             true
@@ -135,10 +126,7 @@ mod tests {
         state.try_acquire("job-a").unwrap();
         assert!(state.is_busy());
         let err = state.try_acquire("job-b").unwrap_err();
-        assert!(
-            err.to_string().contains("already processing"),
-            "got {err}"
-        );
+        assert!(err.to_string().contains("already processing"), "got {err}");
         state.release();
         assert!(!state.is_busy());
         state.try_acquire("job-b").unwrap();

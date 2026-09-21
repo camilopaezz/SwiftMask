@@ -9,8 +9,6 @@ import {
 import type { GpuInfo, JobTimings, RuntimeInfo } from "../lib/tauri";
 import type { Theme } from "../lib/theme";
 
-export type { Theme } from "../lib/theme";
-
 export type SettingsState = {
   mode: ModelMode;
   /** Runtime catalog from `list_models` (empty until App bootstrap). */

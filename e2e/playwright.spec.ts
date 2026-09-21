@@ -343,7 +343,7 @@ test.describe("SwiftMask", () => {
     await expect(
       page.getByRole("button", { name: "MIT License" }),
     ).toBeVisible();
-    await expect(page.getByText("SwiftMask 1.0.0")).toBeVisible();
+    await expect(page.getByText("SwiftMask 1.2.0")).toBeVisible();
     await expect(page.getByText("ONNX Runtime 1.24")).toBeVisible();
 
     await page.keyboard.press("Escape");

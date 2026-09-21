@@ -94,9 +94,9 @@ Downloads are verified with **SHA-256** before use and cached under the app data
 
 ## How to use
 
-1. **Open images** — **Select image**, drop one or more files on the preview (`Ctrl+O` / `⌘O`), or **Open folder** (`Ctrl+Shift+O` / `⌘⇧O`). Multi-drop and folders fill the queue drawer.
+1. **Open images** — **Select image**, drop one or more files on the preview (`Ctrl+O`), or **Open folder** (`Ctrl+Shift+O`). Multi-drop and folders fill the queue drawer.
 2. **Pick a quality mode** — download on first use (Balanced is the preferred default).
-3. Click **Process** / **Process all** (`Ctrl+Enter` / `⌘Enter`). Cancel with **Escape** while a job is running. For a watched folder, turn on **Watch** and run Process once so later arrivals auto-process.
+3. Click **Process** / **Process all** (`Ctrl+Enter`). Cancel with **Escape** while a job is running. For a watched folder, turn on **Watch** and run Process once so later arrivals auto-process.
 4. Use the **comparison slider** to check the result. Output is saved as a transparent PNG.
 
 ![Before and after](docs/screenshots/03-before-after.jpg)

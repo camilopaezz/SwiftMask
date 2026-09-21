@@ -137,14 +137,6 @@ fn render_typescript() -> String {
         ));
         body.push_str("  },\n");
     }
-    body.push_str("];\n\n");
-    body.push_str(
-        "export function getModelById(\n\
-         \tid: ModelMode,\n\
-         \tmodels: readonly ModelStaticMeta[] = MODEL_REGISTRY,\n\
-         ): ModelStaticMeta | undefined {\n\
-         \treturn models.find((m) => m.id === id);\n\
-         }\n",
-    );
+    body.push_str("];\n");
     body.replace('\t', "  ")
 }

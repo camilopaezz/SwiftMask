@@ -1,8 +1,10 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { isUiLocked } from "../lib/busy";
 import {
   cancelProcess,
+  isCancelPending,
   isProcessBusy,
   prodCancelDeps,
   prodStartProcessDeps,
@@ -49,7 +51,7 @@ export function ImagePanel() {
   const isProcessing = current?.status === "processing";
   const showCancel = queueActive
     ? queueRunning || cancelling
-    : isProcessing || cancelling;
+    : isProcessing || cancelling || isCancelPending();
   const hasImage = Boolean(current);
   const isDone = current?.status === "done";
   const canShowInFolder = isDone && Boolean(current?.outputPath);
@@ -62,12 +64,7 @@ export function ImagePanel() {
   const processingItem = queueItems.find((i) => i.status === "processing");
 
   const processDisabled = queueActive
-    ? starting ||
-      cancelling ||
-      queueRunning ||
-      pendingCount === 0 ||
-      !modeReady ||
-      isProcessBusy()
+    ? starting || cancelling || isUiLocked() || pendingCount === 0 || !modeReady
     : !hasImage || starting || cancelling || !modeReady || isProcessBusy();
 
   const handleProcess = async () => {
@@ -96,7 +93,7 @@ export function ImagePanel() {
       });
       return;
     }
-    if (!isProcessing) return;
+    if (!isProcessing && !isCancelPending()) return;
     cancellingRef.current = true;
     setCancelling(true);
     void cancelProcess(prodCancelDeps()).finally(() => {

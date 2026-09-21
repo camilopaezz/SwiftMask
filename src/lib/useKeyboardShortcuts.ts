@@ -2,9 +2,9 @@ import { useEffect } from "react";
 import { useImageStore } from "../stores/imageStore";
 import { queueStore } from "../stores/queueStore";
 import { settingsStore } from "../stores/settingsStore";
+import { isUiLocked } from "./busy";
 import {
   cancelProcess,
-  isProcessBusy,
   prodCancelDeps,
   prodStartProcessDeps,
   startProcess,
@@ -90,7 +90,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
         isProcessing:
           currentStatus === "processing" || queue.running || isQueueRunActive(),
         hasImage: hasImage || (queueActive && queue.items.length > 0),
-        isBusy: isProcessBusy() || isQueueRunActive(),
+        isBusy: isUiLocked(),
       };
 
       const action = resolveShortcutAction(key, ctx);

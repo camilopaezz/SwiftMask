@@ -1,9 +1,10 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 use crate::error::AppError;
+use crate::fs_util::write_atomic;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
@@ -28,24 +29,45 @@ pub fn config_path(app: &AppHandle) -> Result<PathBuf, AppError> {
 }
 
 pub fn load_config(app: &AppHandle) -> Result<Config, AppError> {
-    let path = config_path(app)?;
+    load_config_from_path(&config_path(app)?)
+}
+
+pub fn load_config_from_path(path: &Path) -> Result<Config, AppError> {
     if !path.exists() {
         return Ok(Config::default());
     }
-    let bytes = std::fs::read(&path).map_err(crate::error::config_io_error)?;
-    let config = serde_json::from_slice(&bytes)
-        .map_err(|e| AppError::Config(format!("parse config: {e}")))?;
-    Ok(config)
+    let bytes = std::fs::read(path).map_err(crate::error::config_io_error)?;
+    match serde_json::from_slice(&bytes) {
+        Ok(config) => Ok(config),
+        Err(e) => {
+            let bak = path.with_extension("json.bak");
+            if let Err(rename_err) = std::fs::rename(path, &bak) {
+                log::warn!(
+                    "parse config failed ({e}); could not quarantine {}: {rename_err}",
+                    path.display()
+                );
+            } else {
+                log::warn!(
+                    "parse config failed ({e}); moved damaged file to {}",
+                    bak.display()
+                );
+            }
+            Ok(Config::default())
+        }
+    }
 }
 
 pub fn save_config(app: &AppHandle, config: &Config) -> Result<(), AppError> {
-    let path = config_path(app)?;
+    save_config_to_path(&config_path(app)?, config)
+}
+
+pub fn save_config_to_path(path: &Path, config: &Config) -> Result<(), AppError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(crate::error::config_io_error)?;
     }
     let bytes = serde_json::to_vec_pretty(config)
         .map_err(|e| AppError::Config(format!("serialize config: {e}")))?;
-    std::fs::write(&path, bytes).map_err(crate::error::config_io_error)?;
+    write_atomic(path, &bytes).map_err(crate::error::config_io_error)?;
     Ok(())
 }
 
@@ -82,5 +104,30 @@ mod tests {
         let parsed: Config = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.execution_provider(), "cpu");
         assert_eq!(parsed.output_dir, None);
+    }
+
+    #[test]
+    fn load_recovers_malformed_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, b"{not-json").unwrap();
+        let loaded = load_config_from_path(&path).unwrap();
+        assert_eq!(loaded.execution_provider(), "cpu");
+        assert!(!path.exists());
+        assert!(dir.path().join("config.json.bak").exists());
+    }
+
+    #[test]
+    fn save_is_atomic_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let config = Config {
+            execution_provider: Some("cuda".into()),
+            output_dir: Some("/tmp".into()),
+        };
+        save_config_to_path(&path, &config).unwrap();
+        let loaded = load_config_from_path(&path).unwrap();
+        assert_eq!(loaded.execution_provider(), "cuda");
+        assert_eq!(loaded.output_dir.as_deref(), Some("/tmp"));
     }
 }

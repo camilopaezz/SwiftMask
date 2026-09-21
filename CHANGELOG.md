@@ -6,6 +6,18 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ## [Unreleased]
 
+### Fixed
+
+- Single-image cancel can be retried if IPC cancel fails instead of wedging Process
+- Output PNG and `config.json` writes go through a temp file then rename
+- Malformed `config.json` is quarantined so the app still boots
+- Queue runs record last-job timings in Settings
+- Folder-watch auto-run no longer imports through a module cycle
+
+### Removed
+
+- Dead single-image `acceptDrop` path and unused generated `getModelById`
+
 ## [1.2.0] - 2026-08-12
 
 English and Spanish UI localization.
@@ -114,7 +126,8 @@ First stable release. Non-prerelease tags enable the in-app auto-updater (`/rele
 - Quality modes: Turbo (bundled), Balanced, Balanced+, Max Quality
 - GPU benchmark, model downloads with SHA-256 verification, compare slider export
 
-[Unreleased]: https://github.com/camilopaezz/SwiftMask/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/camilopaezz/SwiftMask/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/camilopaezz/SwiftMask/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/camilopaezz/SwiftMask/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/camilopaezz/SwiftMask/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/camilopaezz/SwiftMask/compare/v0.9.0-beta.1...v1.0.0

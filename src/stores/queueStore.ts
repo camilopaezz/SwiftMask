@@ -1,5 +1,6 @@
 import { useStore } from "zustand/react";
 import { createStore } from "zustand/vanilla";
+import { baseName } from "../lib/path";
 
 export type QueueItemStatus = "pending" | "processing" | "done" | "failed";
 
@@ -324,11 +325,13 @@ export function useQueueStore<T>(
 }
 
 export function fileNameFromPath(path: string): string {
-  return path.split(/[\\/]/).pop() ?? path;
+  return baseName(path);
 }
 
 /** Preview target: pinned, else processing, else selected, else first. */
-export function resolveQueuePreviewId(state: QueueState): string | null {
+export function resolveQueuePreviewId(
+  state: Pick<QueueState, "items" | "pinnedId" | "selectedId">,
+): string | null {
   if (state.pinnedId && state.items.some((i) => i.id === state.pinnedId)) {
     return state.pinnedId;
   }
