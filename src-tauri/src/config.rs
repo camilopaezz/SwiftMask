@@ -33,6 +33,7 @@ pub fn load_config(app: &AppHandle) -> Result<Config, AppError> {
 }
 
 pub fn load_config_from_path(path: &Path) -> Result<Config, AppError> {
+    crate::fs_util::recover_replaced(path).map_err(crate::error::config_io_error)?;
     if !path.exists() {
         return Ok(Config::default());
     }
@@ -129,5 +130,24 @@ mod tests {
         let loaded = load_config_from_path(&path).unwrap();
         assert_eq!(loaded.execution_provider(), "cuda");
         assert_eq!(loaded.output_dir.as_deref(), Some("/tmp"));
+    }
+
+    #[test]
+    fn load_recovers_stranded_replace_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let bak = dir.path().join("config.json.old");
+        std::fs::write(
+            &bak,
+            br#"{"execution_provider":"cuda","output_dir":"/kept"}"#,
+        )
+        .unwrap();
+
+        let loaded = load_config_from_path(&path).unwrap();
+
+        assert_eq!(loaded.execution_provider(), "cuda");
+        assert_eq!(loaded.output_dir.as_deref(), Some("/kept"));
+        assert!(path.exists());
+        assert!(!bak.exists());
     }
 }

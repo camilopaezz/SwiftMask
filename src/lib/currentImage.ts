@@ -65,6 +65,13 @@ let cancelGate = false;
  */
 let activeRunId: string | null = null;
 
+/**
+ * Run id of a cancel that has not been acknowledged yet. Cleared only on
+ * success. Retries must reuse it: the first attempt nulls `activeRunId`, and
+ * falling back to the image id is a stale cancel the backend ignores.
+ */
+let pendingCancelRunId: string | null = null;
+
 /** Run ids the user cancelled; late done/error/progress for these are ignored. */
 const discardedRunIds = new Set<string>();
 
@@ -85,6 +92,7 @@ export function resetProcessGateForTests(): void {
   processGate = false;
   cancelGate = false;
   activeRunId = null;
+  pendingCancelRunId = null;
   discardedRunIds.clear();
   lastSingleFallback = null;
   singleTerminalNotified = false;
@@ -283,8 +291,9 @@ export async function cancelProcess(deps: CancelDeps): Promise<void> {
   if (current.status !== "processing" && !retrying) return;
   if (cancelGate && !retrying) return;
 
-  const runId = activeRunId ?? current.id;
+  const runId = pendingCancelRunId ?? activeRunId ?? current.id;
   discardedRunIds.add(runId);
+  pendingCancelRunId = runId;
   activeRunId = null;
   cancelGate = true;
   if (!retrying) {
@@ -316,6 +325,7 @@ export async function cancelProcess(deps: CancelDeps): Promise<void> {
     }
   }
   cancelGate = false;
+  pendingCancelRunId = null;
   const still = imageStore.getState().current;
   if (still) {
     imageStore.getState().patch({ status: still.status });

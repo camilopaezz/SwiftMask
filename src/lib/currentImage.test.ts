@@ -387,6 +387,8 @@ describe("currentImage", () => {
 
       await cancelProcess({ cancelInference });
       expect(cancelInference).toHaveBeenCalledTimes(2);
+      expect(cancelInference).toHaveBeenNthCalledWith(1, "run-fail");
+      expect(cancelInference).toHaveBeenNthCalledWith(2, "run-fail");
       expect(imageStore.getState().current?.status).toBe("cancelled");
       expect(isProcessBusy()).toBe(true);
       expect(await startProcess(makeDeps())).toBe("already-processing");
@@ -408,6 +410,9 @@ describe("currentImage", () => {
       expect(isProcessBusy()).toBe(true);
       await cancelProcess({ cancelInference });
       expect(cancelInference).toHaveBeenCalledTimes(3);
+      expect(cancelInference).toHaveBeenNthCalledWith(1, "run-retry");
+      expect(cancelInference).toHaveBeenNthCalledWith(2, "run-retry");
+      expect(cancelInference).toHaveBeenNthCalledWith(3, "run-retry");
       expect(isProcessBusy()).toBe(false);
       expect(imageStore.getState().current?.status).toBe("cancelled");
     });
