@@ -2,11 +2,11 @@
 //!
 //! ```bash
 //! BIREFNET_ONNX=/tmp/swiftmask-models/birefnet-lite-512.onnx \
-//! BIREFNET_IMAGE=/home/camilo/Pictures/Gisele_Bundchen2.jpg \
-//! cargo test --manifest-path src-tauri/Cargo.toml --test smoke_birefnet_lite -- --nocapture
+//! BIREFNET_IMAGE=src-tauri/tests/fixtures/sample.png \
+//! cargo test --manifest-path src-tauri/Cargo.toml --test smoke_birefnet_lite -- --ignored --nocapture
 //! ```
 //!
-//! Skips when `BIREFNET_ONNX` is unset so normal `cargo test` stays fast.
+//! Ignored unless explicitly run so default `cargo test` does not report a no-op pass.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -46,7 +46,6 @@ fn logit_stats(output: &ArrayD<f32>) -> (Vec<usize>, f32, f32, f32, f32) {
     } else {
         above_one as f32 / n as f32
     };
-    let _ = (frac_neg, frac_gt1); // printed below
     println!(
         "logits: shape={:?} min={:.4} max={:.4} mean={:.4} frac_neg={:.3} frac>1={:.3}",
         shape, min, max, mean, frac_neg, frac_gt1
@@ -76,8 +75,12 @@ fn raw_minmax(original_size: (u32, u32), output: &ArrayD<f32>) -> GrayImage {
             mask.put_pixel(x as u32, y as u32, image::Luma([(n * 255.0).round() as u8]));
         }
     }
-    let resized =
-        image::imageops::resize(&mask, original_size.0, original_size.1, image::imageops::FilterType::Lanczos3);
+    let resized = image::imageops::resize(
+        &mask,
+        original_size.0,
+        original_size.1,
+        image::imageops::FilterType::Lanczos3,
+    );
     image::imageops::blur(&resized, 1.0)
 }
 
@@ -112,14 +115,11 @@ fn write_rgba(path: &PathBuf, rgb: &RgbImage, alpha: &GrayImage) {
 }
 
 #[test]
+#[ignore = "requires BIREFNET_ONNX"]
 fn birefnet_general_lite_smoke() {
-    let onnx = match env_path("BIREFNET_ONNX") {
-        Some(p) if p.is_file() => p,
-        _ => {
-            eprintln!("skip: set BIREFNET_ONNX to the downloaded ONNX path");
-            return;
-        }
-    };
+    let onnx = env_path("BIREFNET_ONNX")
+        .filter(|p| p.is_file())
+        .expect("set BIREFNET_ONNX to the downloaded ONNX path (cargo test -- --ignored)");
     let image_path = env_path("BIREFNET_IMAGE").unwrap_or_else(|| {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.png")
     });
@@ -129,7 +129,8 @@ fn birefnet_general_lite_smoke() {
         image_path.display()
     );
 
-    let out_dir = env_path("BIREFNET_OUT").unwrap_or_else(|| PathBuf::from("/tmp/swiftmask-birefnet-smoke"));
+    let out_dir =
+        env_path("BIREFNET_OUT").unwrap_or_else(|| PathBuf::from("/tmp/swiftmask-birefnet-smoke"));
     std::fs::create_dir_all(&out_dir).unwrap();
 
     let image_bytes = std::fs::read(&image_path).unwrap();
@@ -179,8 +180,8 @@ fn birefnet_general_lite_smoke() {
     );
 
     // Production path (sigmoid → min-max).
-    let alpha_prod =
-        pipeline::postprocess("birefnet-general-lite", original_size, &output).unwrap();
+    let biref = models::find_model("birefnet-general-lite").unwrap();
+    let alpha_prod = pipeline::postprocess(biref, original_size, &output).unwrap();
     let (mn, mx, mean, frac_ext) = mask_histogram(&alpha_prod);
     println!(
         "production (sigmoid+minmax): min={} max={} mean={:.1} frac_near_extreme={:.3}",

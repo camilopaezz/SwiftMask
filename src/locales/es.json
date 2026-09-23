@@ -133,6 +133,10 @@
     },
     "ensureDirFailed": {
       "title": "No se pudo crear la carpeta de salida"
+    },
+    "cancelFailed": {
+      "title": "No se pudo cancelar",
+      "body": "El trabajo puede seguir en curso. Pulsa Cancelar de nuevo."
     }
   },
   "queue": {

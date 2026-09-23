@@ -22,13 +22,16 @@ pub trait JobSink {
     fn on_fallback(&self, reason: &str, from_ep: &str, to_ep: &str) -> Result<(), AppError>;
 }
 
+pub type RunInferenceFn<'a> =
+    dyn Fn(&str, &str, &Array4<f32>) -> Result<ArrayD<f32>, AppError> + 'a;
+
 pub struct JobDeps<'a> {
     pub sink: &'a dyn JobSink,
     pub execution_provider: &'a dyn Fn() -> Result<String, AppError>,
     pub model_is_ready: &'a dyn Fn(&crate::models::ModelEntry) -> Result<bool, AppError>,
     /// Session load + forward pass. Implementations must load the model for `ep`
     /// (e.g. via `with_session`) so load-time OOM still participates in GPU→CPU fallback.
-    pub run_inference: &'a dyn Fn(&str, &str, &Array4<f32>) -> Result<ArrayD<f32>, AppError>,
+    pub run_inference: &'a RunInferenceFn<'a>,
 }
 
 fn ep_is_cpu(ep: &str) -> bool {
@@ -129,11 +132,8 @@ fn run_inner(
                 deps.sink.on_progress("inferring-cpu", 50.0)?;
                 state.check_cancel()?;
                 let timer_cpu = StageTimer::start("inferring-cpu");
-                let output = (deps.run_inference)(
-                    &job.model_id,
-                    crate::inference::EP_CPU,
-                    &tensor,
-                )?;
+                let output =
+                    (deps.run_inference)(&job.model_id, crate::inference::EP_CPU, &tensor)?;
                 stages.push(timer_cpu.finish());
                 output
             }
@@ -146,7 +146,7 @@ fn run_inner(
     let timer = StageTimer::start("postprocessing");
     let alpha = {
         let output = output;
-        crate::pipeline::postprocess(&job.model_id, original_size, &output)?
+        crate::pipeline::postprocess(model, original_size, &output)?
     };
     stages.push(timer.finish());
 
@@ -156,7 +156,7 @@ fn run_inner(
     let output_bytes = crate::image_io::encode_png_rgba(&rgb, &alpha)?;
     // Skip write if the user cancelled during encode (or earlier race).
     state.check_cancel()?;
-    std::fs::write(&job.output_path, output_bytes)
+    crate::fs_util::write_atomic(std::path::Path::new(&job.output_path), &output_bytes)
         .map_err(crate::error::output_write_error)?;
     stages.push(timer.finish());
 
@@ -197,10 +197,7 @@ mod tests {
 
     impl JobSink for Recorder {
         fn on_progress(&self, stage: &str, pct: f32) -> Result<(), AppError> {
-            self.progress
-                .lock()
-                .unwrap()
-                .push((stage.to_string(), pct));
+            self.progress.lock().unwrap().push((stage.to_string(), pct));
             Ok(())
         }
 
@@ -237,7 +234,7 @@ mod tests {
             crate::inference::with_session(
                 model_id,
                 ep,
-                || load(&model),
+                || load(model),
                 |session| crate::inference::run(session, tensor),
             )
         }
@@ -597,7 +594,7 @@ mod tests {
             crate::inference::with_session(
                 model_id,
                 ep,
-                || load_u2netp(&model),
+                || load_u2netp(model),
                 |session| crate::inference::run(session, tensor),
             )
         };
@@ -613,11 +610,7 @@ mod tests {
 
         assert_eq!(
             recorder.fallbacks.lock().unwrap().as_slice(),
-            &[(
-                "oom".to_string(),
-                "directml".to_string(),
-                "cpu".to_string()
-            )]
+            &[("oom".to_string(), "directml".to_string(), "cpu".to_string())]
         );
         let stages: Vec<String> = recorder
             .progress
@@ -628,11 +621,7 @@ mod tests {
             .collect();
         assert!(stages.contains(&"inferring-cpu".to_string()));
         let timings = recorder.timings.lock().unwrap().clone().unwrap();
-        let timing_stages: Vec<_> = timings
-            .stages
-            .iter()
-            .map(|t| t.stage.as_str())
-            .collect();
+        let timing_stages: Vec<_> = timings.stages.iter().map(|t| t.stage.as_str()).collect();
         assert!(timing_stages.contains(&"inferring"));
         assert!(timing_stages.contains(&"inferring-cpu"));
         assert!(recorder.done.lock().unwrap().is_some());
@@ -697,11 +686,7 @@ mod tests {
         assert_eq!(*calls.lock().unwrap(), 2);
         assert_eq!(
             recorder.fallbacks.lock().unwrap().as_slice(),
-            &[(
-                "oom".to_string(),
-                "directml".to_string(),
-                "cpu".to_string()
-            )]
+            &[("oom".to_string(), "directml".to_string(), "cpu".to_string())]
         );
         let errors = recorder.errors.lock().unwrap();
         assert_eq!(errors.len(), 1);
@@ -782,7 +767,7 @@ mod tests {
             crate::inference::with_session(
                 model_id,
                 ep,
-                || load_u2netp(&model),
+                || load_u2netp(model),
                 |session| crate::inference::run(session, tensor),
             )
         };
@@ -796,7 +781,11 @@ mod tests {
 
         let err = run(&job, &state, &deps).unwrap_err();
         assert!(matches!(err, AppError::Cancelled));
-        assert_eq!(*calls.lock().unwrap(), 1, "CPU run_inference must not run after cancel");
+        assert_eq!(
+            *calls.lock().unwrap(),
+            1,
+            "CPU run_inference must not run after cancel"
+        );
         assert_eq!(sink.inner.errors.lock().unwrap().as_slice(), ["cancelled"]);
         assert!(sink.inner.done.lock().unwrap().is_none());
         assert!(!output.exists());

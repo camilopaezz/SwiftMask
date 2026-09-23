@@ -13,7 +13,7 @@ export function resolveAppLanguage(
   return tag === "es" || tag.startsWith("es-") ? "es" : "en";
 }
 
-export function applyDocumentLang(lng: string): void {
+function applyDocumentLang(lng: string): void {
   if (typeof document === "undefined") return;
   document.documentElement.lang = lng === "es" ? "es" : "en";
 }

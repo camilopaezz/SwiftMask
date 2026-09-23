@@ -1,9 +1,6 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen as tauriListen } from "@tauri-apps/api/event";
-import type { ModelMeta, ModelMode } from "./models";
-
-export type { ModelMeta, ModelMode };
-
+import type { ModelMeta } from "./models";
 export type ProcessingJob = {
   id: string;
   inputPath: string;

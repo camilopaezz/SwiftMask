@@ -1,4 +1,5 @@
 import { ask } from "@tauri-apps/plugin-dialog";
+import i18n from "../i18n";
 import { type ImageItem, imageStore } from "../stores/imageStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
@@ -8,6 +9,7 @@ import { isProcessableMode } from "./models";
 import { shouldProceedWithOverwrite } from "./overwrite";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
 import { deriveOutputPath } from "./path";
+import { showAppErrorNotice } from "./showAppErrorNotice";
 import {
   type InferenceDonePayload,
   type InferenceErrorPayload,
@@ -47,8 +49,6 @@ export type StartProcessResult =
   | "already-processing"
   | "failed";
 
-const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "bmp"]);
-
 /** True while overwrite confirm / start handoff is in flight (before status is processing). */
 let processGate = false;
 
@@ -64,6 +64,13 @@ let cancelGate = false;
  * Events are keyed on this so cancel → re-run cannot clobber the new job.
  */
 let activeRunId: string | null = null;
+
+/**
+ * Run id of a cancel that has not been acknowledged yet. Cleared only on
+ * success. Retries must reuse it: the first attempt nulls `activeRunId`, and
+ * falling back to the image id is a stale cancel the backend ignores.
+ */
+let pendingCancelRunId: string | null = null;
 
 /** Run ids the user cancelled; late done/error/progress for these are ignored. */
 const discardedRunIds = new Set<string>();
@@ -85,6 +92,7 @@ export function resetProcessGateForTests(): void {
   processGate = false;
   cancelGate = false;
   activeRunId = null;
+  pendingCancelRunId = null;
   discardedRunIds.clear();
   lastSingleFallback = null;
   singleTerminalNotified = false;
@@ -93,15 +101,6 @@ export function resetProcessGateForTests(): void {
 /** Test-only: bind event handlers to a run id without going through startProcess. */
 export function setActiveRunIdForTests(runId: string | null): void {
   activeRunId = runId;
-}
-
-function getExtension(path: string): string {
-  const dot = path.lastIndexOf(".");
-  return dot >= 0 ? path.slice(dot + 1).toLowerCase() : "";
-}
-
-function isImageFile(path: string): boolean {
-  return IMAGE_EXTENSIONS.has(getExtension(path));
 }
 
 /**
@@ -149,26 +148,9 @@ export function isProcessBusy(): boolean {
   );
 }
 
-export function acceptDrop(
-  paths: string[],
-  settings: ProcessSettings,
-): boolean {
-  const imagePaths = paths.filter(isImageFile);
-  if (imagePaths.length === 0) return false;
-  if (isProcessBusy()) return false;
-
-  const inputPath = imagePaths[0];
-  const item: ImageItem = {
-    id: crypto.randomUUID(),
-    inputPath,
-    outputPath: deriveOutputPath(inputPath, settings.outputDir, settings.mode),
-    status: "ready",
-    progress: 0,
-    stage: null,
-    error: null,
-  };
-  imageStore.getState().set(item);
-  return true;
+/** True while cancel is waiting for the backend slot (Process stays blocked). */
+export function isCancelPending(): boolean {
+  return cancelGate;
 }
 
 export function syncOutputPath(settings: ProcessSettings): void {
@@ -303,30 +285,38 @@ export async function startProcess(
  */
 export async function cancelProcess(deps: CancelDeps): Promise<void> {
   const current = imageStore.getState().current;
-  if (current?.status !== "processing") return;
-  if (cancelGate) return;
+  if (!current) return;
 
-  const runId = activeRunId ?? current.id;
+  const retrying = cancelGate && current.status === "cancelled";
+  if (current.status !== "processing" && !retrying) return;
+  if (cancelGate && !retrying) return;
+
+  const runId = pendingCancelRunId ?? activeRunId ?? current.id;
   discardedRunIds.add(runId);
+  pendingCancelRunId = runId;
   activeRunId = null;
   cancelGate = true;
-  imageStore.getState().patch({
-    status: "cancelled",
-    progress: 0,
-    stage: null,
-    error: null,
-  });
+  if (!retrying) {
+    imageStore.getState().patch({
+      status: "cancelled",
+      progress: 0,
+      stage: null,
+      error: null,
+    });
+  }
   try {
     await deps.cancelInference(runId);
   } catch {
-    // Slot may still be held — keep cancelGate so Process stays blocked.
-    // Best-effort retry once; if that fails, leave the gate set so we do not
-    // re-enable start while the backend may still be busy (backend single-flight
-    // still rejects overlap). User can retry cancel; tests use resetProcessGateForTests.
     try {
       await deps.cancelInference(runId);
     } catch {
-      // Nudge subscribers so UI reflects cancelled + still-busy gate.
+      showAppErrorNotice(new Error("cancel failed"), {
+        copy: {
+          title: i18n.t("errors.cancelFailed.title"),
+          body: i18n.t("errors.cancelFailed.body"),
+        },
+        code: "cancel_failed",
+      });
       const still = imageStore.getState().current;
       if (still) {
         imageStore.getState().patch({ status: still.status });
@@ -335,7 +325,7 @@ export async function cancelProcess(deps: CancelDeps): Promise<void> {
     }
   }
   cancelGate = false;
-  // Nudge store subscribers (FileBlock, etc.) so they re-read isProcessBusy().
+  pendingCancelRunId = null;
   const still = imageStore.getState().current;
   if (still) {
     imageStore.getState().patch({ status: still.status });
@@ -463,38 +453,36 @@ export function applyFallback(payload: InferenceFallbackPayload): void {
 }
 
 export async function initCurrentImageListeners(): Promise<() => void> {
-  const unsubscribeProgress = await listenInferenceProgress(
-    (payload: InferenceProgressPayload) => {
-      applyProgress(payload);
-    },
-  );
-
-  const unsubscribeDone = await listenInferenceDone(
-    (payload: InferenceDonePayload) => {
-      // Only record timings when the UI actually accepted the done event.
-      if (applyDone(payload)) {
-        settingsStore.getState().setLastJobTimings(payload.timings);
-      }
-    },
-  );
-
-  const unsubscribeError = await listenInferenceError(
-    (payload: InferenceErrorPayload) => {
-      applyError(payload);
-    },
-  );
-
-  const unsubscribeFallback = await listenInferenceFallback(
-    (payload: InferenceFallbackPayload) => {
-      applyFallback(payload);
-    },
-  );
-
+  const unsubs: Array<() => void> = [];
+  try {
+    unsubs.push(
+      await listenInferenceProgress((payload: InferenceProgressPayload) => {
+        applyProgress(payload);
+      }),
+    );
+    unsubs.push(
+      await listenInferenceDone((payload: InferenceDonePayload) => {
+        if (applyDone(payload)) {
+          settingsStore.getState().setLastJobTimings(payload.timings);
+        }
+      }),
+    );
+    unsubs.push(
+      await listenInferenceError((payload: InferenceErrorPayload) => {
+        applyError(payload);
+      }),
+    );
+    unsubs.push(
+      await listenInferenceFallback((payload: InferenceFallbackPayload) => {
+        applyFallback(payload);
+      }),
+    );
+  } catch (err) {
+    for (const u of unsubs) u();
+    throw err;
+  }
   return () => {
-    unsubscribeProgress();
-    unsubscribeDone();
-    unsubscribeError();
-    unsubscribeFallback();
+    for (const u of unsubs) u();
   };
 }
 

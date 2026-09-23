@@ -69,6 +69,7 @@ describe("startQueueProcess", () => {
     queueStore.getState().clearAll();
     uiStore.getState().dismissNotice();
     seedProcessableSettings();
+    settingsStore.getState().setLastJobTimings(null);
     desktopNotifyMock.mockClear();
   });
 
@@ -95,6 +96,38 @@ describe("startQueueProcess", () => {
       },
       { terminalCount: 2 },
     );
+  });
+
+  it("records timings from the last done event", async () => {
+    seedPending(["/tmp/a.png"]);
+    const timings = {
+      stages: [{ stage: "inferring", seconds: 0.4 }],
+      total_seconds: 0.5,
+    };
+    let emitDone:
+      | ((payload: {
+          id: string;
+          output_path: string;
+          timings: typeof timings;
+        }) => void)
+      | undefined;
+    const timed = baseDeps({
+      listenDone: async (handler) => {
+        emitDone = handler;
+        return () => {
+          emitDone = undefined;
+        };
+      },
+      removeBackground: async (job) => {
+        emitDone?.({
+          id: job.id,
+          output_path: job.outputPath,
+          timings,
+        });
+      },
+    });
+    await startQueueProcess(timed);
+    expect(settingsStore.getState().lastJobTimings).toEqual(timings);
   });
 
   it("continues after a failure", async () => {

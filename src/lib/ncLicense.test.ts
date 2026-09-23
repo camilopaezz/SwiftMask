@@ -10,7 +10,6 @@ import {
   NC_LICENSE_ACK_KEY,
   needsNcLicenseAck,
   setNcLicenseAck,
-  shouldShowNcBadge,
 } from "./ncLicense";
 
 class MemStorage implements Storage {
@@ -77,28 +76,6 @@ describe("NC license acknowledgment", () => {
     setNcLicenseAck();
     expect(hasNcLicenseAck()).toBe(true);
     expect(localStorage.getItem(NC_LICENSE_ACK_KEY)).toBe("1");
-  });
-});
-
-describe("shouldShowNcBadge", () => {
-  it("shows only for ready NC models", () => {
-    expect(shouldShowNcBadge(meta("rmbg-1.4", { downloaded: true }))).toBe(
-      true,
-    );
-    expect(shouldShowNcBadge(meta("rmbg-2.0", { downloaded: true }))).toBe(
-      true,
-    );
-  });
-
-  it("hides before download and for commercial models", () => {
-    expect(shouldShowNcBadge(meta("rmbg-1.4"))).toBe(false);
-    expect(shouldShowNcBadge(meta("u2netp", { bundled: true }))).toBe(false);
-    expect(
-      shouldShowNcBadge(meta("isnet-general-use", { downloaded: true })),
-    ).toBe(false);
-    expect(
-      shouldShowNcBadge(meta("birefnet-general-lite", { downloaded: true })),
-    ).toBe(false);
   });
 });
 

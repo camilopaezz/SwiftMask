@@ -133,6 +133,10 @@
     },
     "ensureDirFailed": {
       "title": "Could not create output folder"
+    },
+    "cancelFailed": {
+      "title": "Could not cancel",
+      "body": "The job may still be running. Click Cancel again."
     }
   },
   "queue": {

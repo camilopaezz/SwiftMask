@@ -2,7 +2,7 @@
 name = "swiftmask"
 version = "1.2.0"
 description = "SwiftMask — local background removal desktop app"
-authors = ["you"]
+authors = ["SwiftMask contributors"]
 license = "MIT"
 edition = "2021"
 rust-version = "1.88"

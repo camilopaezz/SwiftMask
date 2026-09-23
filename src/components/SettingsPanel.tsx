@@ -2,13 +2,13 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { type RefObject, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { isUiLocked } from "../lib/busy";
 import { epLabel } from "../lib/epLabel";
 import {
   formatUpdateCheckFailedCopy,
   formatUpdateInstallFailedCopy,
   formatUpToDateCopy,
 } from "../lib/errorCopy";
-import { isQueueRunActive } from "../lib/queueRunner";
 import { showAppErrorNotice, showAppNotice } from "../lib/showAppErrorNotice";
 import {
   invokeClearOutputDir,
@@ -26,8 +26,8 @@ import {
   classifyUpdaterError,
   installUpdateAndRelaunch,
 } from "../lib/updater";
-import { useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
+import { stageLabel } from "./ProgressBar";
 
 export type SettingsPanelProps = {
   /**
@@ -54,16 +54,6 @@ const THEME_OPTIONS: { value: Theme; labelKey: string }[] = [
   { value: "light", labelKey: "settings.themeLight" },
   { value: "dark", labelKey: "settings.themeDark" },
 ];
-
-const STAGE_KEYS: Record<string, string> = {
-  decoding: "stages.decoding",
-  preprocessing: "stages.preprocessing",
-  inferring: "stages.inferring",
-  "inferring-cpu": "stages.inferringCpu",
-  postprocessing: "stages.postprocessing",
-  encoding: "stages.encoding",
-  Processing: "stages.processing",
-};
 
 function formatVram(bytes: number): string {
   const gib = bytes / 1024 ** 3;
@@ -97,8 +87,7 @@ export function SettingsPanel({
     setGpuInfo,
     setRuntimeInfo,
   } = useSettingsStore();
-  const queueRunning = useQueueStore((s) => s.running);
-  const epLocked = queueRunning || isQueueRunActive();
+  const epLocked = isUiLocked();
   const [loading, setLoading] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateUiStatus>("idle");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
@@ -336,11 +325,6 @@ export function SettingsPanel({
       ? t("settings.checking")
       : t("settings.checkForUpdates");
 
-  const stageLabel = (stage: string) => {
-    const key = STAGE_KEYS[stage];
-    return key ? t(key) : stage;
-  };
-
   return (
     <div className="settings-panel">
       <div className="settings-field">
@@ -556,7 +540,7 @@ export function SettingsPanel({
           <div>{t("settings.lastJob")}</div>
           {lastJobTimings.stages.map((timing) => (
             <div key={timing.stage}>
-              {stageLabel(timing.stage)}: {formatSeconds(timing.seconds)}
+              {stageLabel(timing.stage, t)}: {formatSeconds(timing.seconds)}
             </div>
           ))}
           <div>

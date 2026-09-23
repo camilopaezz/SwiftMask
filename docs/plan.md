@@ -61,7 +61,7 @@ macOS/CoreML, ROCm, mask threshold controls, background replacement, video, tili
 | Item | Notes |
 |------|--------|
 | Beta update channel | A16 stable-only today (`/releases/latest`) |
-| Real desktop E2E | `e2e/tauri-webdriver.config.ts` is a stub |
+| Real desktop E2E | Mocked Playwright covers the web UI; native WebDriver is still open |
 | Local diagnostics | Rotating local log + “copy diagnostics” (no network) |
 | Large-image guard | Fail/warn before OOM on huge inputs |
 | `ort` 2.0 stable | Still on RC; revisit when stable |

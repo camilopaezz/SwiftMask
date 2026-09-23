@@ -55,13 +55,7 @@ impl FolderWatchState {
 }
 
 fn is_image_path(path: &Path) -> bool {
-    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
-        return false;
-    };
-    matches!(
-        ext.to_ascii_lowercase().as_str(),
-        "png" | "jpg" | "jpeg" | "webp" | "bmp"
-    )
+    crate::image_ext::is_image_path(path)
 }
 
 fn is_junk_name(name: &str) -> bool {
@@ -96,10 +90,9 @@ fn should_consider(path: &Path, folder: &Path) -> bool {
 fn is_arrival_event(kind: &EventKind) -> bool {
     match kind {
         EventKind::Create(_) | EventKind::Any => true,
-        EventKind::Modify(ModifyKind::Name(mode)) => matches!(
-            mode,
-            RenameMode::To | RenameMode::Both | RenameMode::Any
-        ),
+        EventKind::Modify(ModifyKind::Name(mode)) => {
+            matches!(mode, RenameMode::To | RenameMode::Both | RenameMode::Any)
+        }
         _ => false,
     }
 }
@@ -305,14 +298,8 @@ mod tests {
     #[test]
     fn should_consider_top_level_images_only() {
         let folder = PathBuf::from("/tmp/watched");
-        assert!(should_consider(
-            &folder.join("shot.png"),
-            &folder
-        ));
-        assert!(should_consider(
-            &folder.join("photo.JPEG"),
-            &folder
-        ));
+        assert!(should_consider(&folder.join("shot.png"), &folder));
+        assert!(should_consider(&folder.join("photo.JPEG"), &folder));
         assert!(!should_consider(
             &folder.join("nested").join("shot.png"),
             &folder
