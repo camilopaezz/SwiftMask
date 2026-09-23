@@ -17,6 +17,7 @@ import { showAppErrorNotice } from "../lib/showAppErrorNotice";
 import { type ImageItem, useImageStore } from "../stores/imageStore";
 import { fileNameFromPath, useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
+import { useUiStore } from "../stores/uiStore";
 import { ProgressBar, stageLabel } from "./ProgressBar";
 
 function statusLabel(item: ImageItem, t: (key: string) => string): string {
@@ -44,6 +45,9 @@ export function ImagePanel() {
   const queueRunning = useQueueStore((state) => state.running);
   const mode = useSettingsStore((state) => state.mode);
   const models = useSettingsStore((state) => state.models);
+  const modalBlocksShortcuts = useUiStore(
+    (state) => state.modalBlocksShortcuts,
+  );
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancellingRef = useRef(false);
@@ -64,8 +68,18 @@ export function ImagePanel() {
   const processingItem = queueItems.find((i) => i.status === "processing");
 
   const processDisabled = queueActive
-    ? starting || cancelling || isUiLocked() || pendingCount === 0 || !modeReady
-    : !hasImage || starting || cancelling || !modeReady || isProcessBusy();
+    ? starting ||
+      cancelling ||
+      isUiLocked() ||
+      pendingCount === 0 ||
+      !modeReady ||
+      modalBlocksShortcuts
+    : !hasImage ||
+      starting ||
+      cancelling ||
+      !modeReady ||
+      isProcessBusy() ||
+      modalBlocksShortcuts;
 
   const handleProcess = async () => {
     if (processDisabled) return;

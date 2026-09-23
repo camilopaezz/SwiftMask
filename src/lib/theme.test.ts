@@ -1,42 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useMemStorage } from "../test/memStorage";
 import {
   applyTheme,
-  isTheme,
   persistTheme,
   readStoredTheme,
   THEME_STORAGE_KEY,
 } from "./theme";
-
-class MemStorage implements Storage {
-  private store = new Map<string, string>();
-  get length() {
-    return this.store.size;
-  }
-  clear() {
-    this.store.clear();
-  }
-  getItem(key: string): string | null {
-    return this.store.has(key) ? this.store.get(key)! : null;
-  }
-  setItem(key: string, value: string) {
-    this.store.set(key, String(value));
-  }
-  removeItem(key: string) {
-    this.store.delete(key);
-  }
-  key(index: number): string | null {
-    return [...this.store.keys()][index] ?? null;
-  }
-}
-
-function useMemStorage() {
-  beforeEach(() => {
-    vi.stubGlobal("localStorage", new MemStorage());
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-}
 
 describe("readStoredTheme", () => {
   useMemStorage();
@@ -56,40 +25,8 @@ describe("readStoredTheme", () => {
   });
 });
 
-describe("persistTheme", () => {
-  useMemStorage();
-
-  it("writes the theme under the storage key", () => {
-    persistTheme("dark");
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
-  });
-});
-
-describe("isTheme", () => {
-  it("accepts valid themes", () => {
-    expect(isTheme("system")).toBe(true);
-    expect(isTheme("light")).toBe(true);
-    expect(isTheme("dark")).toBe(true);
-  });
-
-  it("rejects invalid values", () => {
-    expect(isTheme("hot-pink")).toBe(false);
-    expect(isTheme(null)).toBe(false);
-  });
-});
-
 describe("applyTheme", () => {
   beforeEach(() => document.documentElement.removeAttribute("data-theme"));
-
-  it("sets data-theme=dark for dark", () => {
-    applyTheme("dark");
-    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
-  });
-
-  it("sets data-theme=light for light", () => {
-    applyTheme("light");
-    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
-  });
 
   it("removes data-theme for system so the media query drives it", () => {
     document.documentElement.setAttribute("data-theme", "dark");

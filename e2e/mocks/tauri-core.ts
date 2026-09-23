@@ -64,8 +64,25 @@ export function invoke<T>(
     }
     case "cancel_download":
       return Promise.resolve(undefined as T);
-    case "pick_output_dir":
+    case "pick_output_dir": {
+      if (typeof state.pickOutputDirResult === "string") {
+        state.config.config.output_dir = state.pickOutputDirResult;
+        return Promise.resolve(state.pickOutputDirResult as T);
+      }
       return Promise.resolve(state.config.config.output_dir as T);
+    }
+    case "pick_folder":
+      return Promise.resolve((state.pickFolderResult ?? null) as T);
+    case "list_folder_images": {
+      const path = String(args?.path ?? "");
+      return Promise.resolve((state.folderImages?.[path] ?? []) as T);
+    }
+    case "ensure_dir":
+      return Promise.resolve(undefined as T);
+    case "watch_folder_start":
+      return Promise.resolve(undefined as T);
+    case "watch_folder_stop":
+      return Promise.resolve(undefined as T);
     case "clear_output_dir":
       state.config.config.output_dir = null;
       return Promise.resolve(undefined as T);
@@ -79,13 +96,19 @@ export function invoke<T>(
     case "cancel_inference":
       // Match production: resolve only after the in-flight worker finishes.
       return (activeInference ?? Promise.resolve()) as Promise<T>;
-    case "path_exists":
-      return Promise.resolve(false as T);
+    case "path_exists": {
+      const path = String(args?.path ?? "");
+      return Promise.resolve((state.existingPaths ?? []).includes(path) as T);
+    }
     case "path_is_dir": {
       // Fixture paths are files; treat bare paths without a trailing separator
       // as files so multi-drop enqueue works in mocked e2e.
       const path = String(args?.path ?? "");
-      return Promise.resolve((path.endsWith("/") || path.endsWith("\\")) as T);
+      const isDir =
+        (state.folderPaths ?? []).includes(path) ||
+        path.endsWith("/") ||
+        path.endsWith("\\");
+      return Promise.resolve(isDir as T);
     }
     case "get_runtime_info":
       return Promise.resolve({
@@ -183,6 +206,8 @@ function simulateDownload(modelId: string): Promise<void> {
       message: "request failed: connection refused",
     });
   }
+  const completeAt = state.downloadDelayMs ?? 100;
+  const midAt = Math.max(1, Math.floor(completeAt / 2));
   return new Promise((resolve) => {
     setTimeout(
       () =>
@@ -191,7 +216,7 @@ function simulateDownload(modelId: string): Promise<void> {
           pct: 50,
           stage: "download",
         }),
-      50,
+      midAt,
     );
     setTimeout(() => {
       emitEvent("model:download", {
@@ -204,7 +229,7 @@ function simulateDownload(modelId: string): Promise<void> {
         m.id === modelId ? { ...m, downloaded: true } : m,
       );
       resolve();
-    }, 100);
+    }, completeAt);
   });
 }
 
