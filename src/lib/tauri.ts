@@ -133,6 +133,16 @@ export function invokePickOutputDir(): Promise<string | null> {
   return tauriInvoke("pick_output_dir");
 }
 
+export type ClipboardImages = {
+  paths: string[];
+  kind: "files" | "pixels";
+  default_output_dir: string | null;
+};
+
+export function invokeImportClipboardImages(): Promise<ClipboardImages> {
+  return tauriInvoke("import_clipboard_images");
+}
+
 /** Reset output directory to default (same folder as each input). */
 export function invokeClearOutputDir(): Promise<void> {
   return tauriInvoke("clear_output_dir");

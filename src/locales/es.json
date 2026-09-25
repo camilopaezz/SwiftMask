@@ -139,6 +139,12 @@
       "body": "El trabajo puede seguir en curso. Pulsa Cancelar de nuevo."
     }
   },
+  "paste": {
+    "busy": {
+      "title": "Ya se está procesando",
+      "body": "Espera a que termine el procesamiento de la imagen actual antes de pegar otra."
+    }
+  },
   "queue": {
     "replaceLive": "¿Reemplazar la cola actual? Se cancelará el trabajo pendiente.",
     "replaceIdle": "¿Reemplazar la cola actual con esta carpeta?",
@@ -332,7 +338,7 @@
     "dropToStart": "Suelta imágenes o una carpeta para iniciar una cola",
     "dropNow": "Suelta imágenes o una carpeta",
     "formats": "PNG, JPG, WEBP, BMP",
-    "hint": "Seleccionar imagen · Ctrl+O · Abrir carpeta · Ctrl+Shift+O",
+    "hint": "Seleccionar imagen · Ctrl+O · Pegar imagen · Ctrl+V · Abrir carpeta · Ctrl+Shift+O",
     "before": "Antes",
     "after": "Después",
     "compareAria": "Comparación antes y después",

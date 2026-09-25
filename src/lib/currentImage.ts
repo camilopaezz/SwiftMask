@@ -8,7 +8,7 @@ import { showFinishNotice } from "./finishNotice";
 import { isProcessableMode } from "./models";
 import { shouldProceedWithOverwrite } from "./overwrite";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
-import { deriveOutputPath } from "./path";
+import { deriveOutputPath, resolveOutputDir } from "./path";
 import { showAppErrorNotice } from "./showAppErrorNotice";
 import {
   type InferenceDonePayload,
@@ -16,6 +16,7 @@ import {
   type InferenceFallbackPayload,
   type InferenceProgressPayload,
   invokeCancelInference,
+  invokeEnsureDir,
   invokePathExists,
   invokeRemoveImageBackground,
   listenInferenceDone,
@@ -36,6 +37,7 @@ export type StartProcessDeps = {
     modelId: string;
   }) => Promise<void>;
   getSettings: () => ProcessSettings;
+  ensureDir?: (path: string) => Promise<void>;
 };
 
 export type CancelDeps = {
@@ -158,7 +160,7 @@ export function syncOutputPath(settings: ProcessSettings): void {
   if (!current || isProcessBusy()) return;
   const outputPath = deriveOutputPath(
     current.inputPath,
-    settings.outputDir,
+    resolveOutputDir(settings.outputDir, current.defaultOutputDir),
     settings.mode,
   );
   if (outputPath === current.outputPath) return;
@@ -198,7 +200,7 @@ export async function startProcess(
     const settings = deps.getSettings();
     const outputPath = deriveOutputPath(
       inputPath,
-      settings.outputDir,
+      resolveOutputDir(settings.outputDir, current.defaultOutputDir),
       settings.mode,
     );
 
@@ -216,9 +218,17 @@ export async function startProcess(
 
     const finalOutputPath = deriveOutputPath(
       latest.inputPath,
-      settings.outputDir,
+      resolveOutputDir(settings.outputDir, latest.defaultOutputDir),
       settings.mode,
     );
+
+    const outputDir = resolveOutputDir(
+      settings.outputDir,
+      latest.defaultOutputDir,
+    );
+    if (latest.defaultOutputDir && outputDir) {
+      await (deps.ensureDir ?? invokeEnsureDir)(outputDir);
+    }
 
     // Per-run id so late events from a cancelled attempt cannot match a re-run.
     const runId = crypto.randomUUID();
@@ -492,6 +502,7 @@ export function prodStartProcessDeps(): StartProcessDeps {
     exists: (p) => invokePathExists(p),
     ask: (msg) => ask(msg),
     removeBackground: invokeRemoveImageBackground,
+    ensureDir: invokeEnsureDir,
     getSettings: () => {
       const s = settingsStore.getState();
       return { mode: s.mode, outputDir: s.outputDir };

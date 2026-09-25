@@ -12,7 +12,7 @@ import { formatFallbackNotice } from "./errorCopy";
 import { showFinishNotice } from "./finishNotice";
 import { isProcessableMode } from "./models";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
-import { deriveOutputPath } from "./path";
+import { deriveOutputPath, resolveOutputDir } from "./path";
 import {
   type BatchOverwriteChoice,
   type BatchOverwriteChooser,
@@ -126,18 +126,27 @@ export function resetQueueRunnerForTests(): void {
   forceQueueIdle();
 }
 
-function effectiveOutputDir(settings: ProcessSettings): string | null {
+function itemOutputDir(
+  item: QueueItem,
+  settings: ProcessSettings,
+): string | null {
   const source = queueStore.getState().source;
-  if (source?.kind === "folder") return source.outputDir;
-  return settings.outputDir;
+  return resolveOutputDir(
+    settings.outputDir,
+    item.defaultOutputDir,
+    source?.kind === "folder" ? source.outputDir : null,
+  );
 }
 
 function refreshOutputPaths(settings: ProcessSettings): void {
   const { items, patchItem } = queueStore.getState();
-  const outDir = effectiveOutputDir(settings);
   for (const item of items) {
     if (item.status !== "pending" && item.status !== "failed") continue;
-    const outputPath = deriveOutputPath(item.inputPath, outDir, settings.mode);
+    const outputPath = deriveOutputPath(
+      item.inputPath,
+      itemOutputDir(item, settings),
+      settings.mode,
+    );
     if (outputPath !== item.outputPath) {
       patchItem(item.id, { outputPath });
     }
@@ -246,23 +255,32 @@ export async function startQueueProcess(
     }
   }
 
-  // Create sibling `{folder}-nobg/` only when we are about to write files.
+  // Create a folder queue's output directory before its run starts.
+  const ensuredDirs = new Set<string>();
   const workLeft = queueStore
     .getState()
     .items.some((i) => isRunnablePending(i, pendingScope));
   if (workLeft) {
     const source = queueStore.getState().source;
-    if (source?.kind === "folder") {
-      const ensureDir = deps.ensureDir ?? invokeEnsureDir;
+    const ensureDir = deps.ensureDir ?? invokeEnsureDir;
+    const needsFolderOutput = queueStore
+      .getState()
+      .items.some(
+        (item) =>
+          isRunnablePending(item, pendingScope) && !item.defaultOutputDir,
+      );
+    if (source?.kind === "folder" && needsFolderOutput) {
+      const outputDir = source.outputDir;
       try {
-        await ensureDir(source.outputDir);
+        await ensureDir(outputDir);
+        ensuredDirs.add(outputDir);
       } catch (err) {
         runGeneration += 1;
         clearRunLatch();
         uiStore.getState().showNotice({
           severity: "error",
           title: i18n.t("errors.ensureDirFailed.title"),
-          body: source.outputDir,
+          body: outputDir,
           code: "ensure_dir_failed",
         });
         console.error("ensure_dir failed", err);
@@ -289,9 +307,25 @@ export async function startQueueProcess(
       if (!next) break;
 
       const liveSettings = deps.getSettings();
+      const outputDir = itemOutputDir(next, liveSettings);
+      // Pixel items may be appended after the run's initial directory check.
+      if (next.defaultOutputDir && outputDir && !ensuredDirs.has(outputDir)) {
+        try {
+          await (deps.ensureDir ?? invokeEnsureDir)(outputDir);
+          ensuredDirs.add(outputDir);
+        } catch (err) {
+          console.error("ensure clipboard output directory failed", err);
+          queueStore.getState().markFailed(next.id, {
+            code: "ensure_dir_failed",
+            message: String(err),
+          });
+          failed += 1;
+          continue;
+        }
+      }
       const outputPath = deriveOutputPath(
         next.inputPath,
-        effectiveOutputDir(liveSettings),
+        outputDir,
         liveSettings.mode,
       );
 
