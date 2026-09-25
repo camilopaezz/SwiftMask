@@ -245,6 +245,13 @@ pub async fn cancel_inference(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn import_clipboard_images(
+    app: AppHandle,
+) -> Result<crate::clipboard_import::ClipboardImport, AppError> {
+    crate::clipboard_import::import(app).await
+}
+
 /// Check whether a path exists using native FS (not the scoped frontend plugin).
 /// Required for overwrite prompts when the output dir is outside `$HOME` etc.
 #[tauri::command]

@@ -35,6 +35,16 @@ export function baseName(path: string): string {
   return lastSep >= 0 ? path.slice(lastSep + 1) : path;
 }
 
+/** Resolve an item's output folder across settings, clipboard, and folder queues. */
+export function resolveOutputDir(
+  configuredDir: string | null,
+  clipboardDefaultDir?: string | null,
+  folderQueueDir?: string | null,
+): string | null {
+  if (clipboardDefaultDir) return configuredDir ?? clipboardDefaultDir;
+  return folderQueueDir ?? configuredDir;
+}
+
 /** Sibling `{folderName}-nobg` next to the opened folder. */
 export function deriveFolderOutputDir(folderPath: string): string {
   const trimmed = folderPath.replace(/[\\/]+$/, "");

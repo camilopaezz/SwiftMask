@@ -3,6 +3,7 @@ import { queueStore } from "../stores/queueStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
 import { MODEL_REGISTRY, PREFERRED_DEFAULT_MODE } from "./models";
+import { enqueueClipboardImages } from "./queue";
 
 vi.mock("./desktopNotify", () => ({
   maybeDesktopNotifyQueueFinished: vi.fn().mockResolvedValue(undefined),
@@ -95,6 +96,132 @@ describe("startQueueProcess", () => {
         body: undefined,
       },
       { terminalCount: 2 },
+    );
+  });
+
+  it("uses clipboard fallback output dir for queue items and ensures it", async () => {
+    queueStore.getState().activateWithItems(
+      [
+        {
+          id: "clipboard",
+          inputPath: "/tmp/pasted.png",
+          outputPath: "/tmp/pasted-nobg.png",
+          status: "pending",
+          progress: 0,
+          stage: null,
+          error: null,
+          jobId: null,
+          defaultOutputDir: "/Pictures/SwiftMask",
+        },
+      ],
+      { kind: "drop" },
+    );
+    const ensured: string[] = [];
+    let outputPath = "";
+    await startQueueProcess(
+      baseDeps({
+        ensureDir: async (path) => {
+          ensured.push(path);
+        },
+        removeBackground: async (job) => {
+          outputPath = job.outputPath;
+        },
+      }),
+    );
+    expect(ensured).toEqual(["/Pictures/SwiftMask"]);
+    expect(outputPath).toBe(
+      `/Pictures/SwiftMask/pasted-nobg-${PREFERRED_DEFAULT_MODE}.png`,
+    );
+  });
+
+  it("routes pixels appended to a running folder queue to Pictures", async () => {
+    queueStore.getState().activateWithItems(
+      [
+        {
+          id: "folder-image",
+          inputPath: "/photos/original.jpg",
+          outputPath: "/photos-nobg/original.png",
+          status: "pending",
+          progress: 0,
+          stage: null,
+          error: null,
+          jobId: null,
+        },
+      ],
+      {
+        kind: "folder",
+        path: "/photos",
+        outputDir: "/photos-nobg",
+        watch: false,
+      },
+    );
+    const ensured: string[] = [];
+    const outputs: string[] = [];
+    await startQueueProcess(
+      baseDeps({
+        ensureDir: async (path) => {
+          ensured.push(path);
+        },
+        removeBackground: async (job) => {
+          outputs.push(job.outputPath);
+          if (job.inputPath === "/photos/original.jpg") {
+            enqueueClipboardImages(
+              ["/cache/pasted-image.png"],
+              { mode: PREFERRED_DEFAULT_MODE, outputDir: null },
+              "/Pictures/SwiftMask",
+            );
+          }
+        },
+      }),
+    );
+
+    expect(ensured).toEqual(["/photos-nobg", "/Pictures/SwiftMask"]);
+    expect(outputs).toEqual([
+      `/photos-nobg/original-nobg-${PREFERRED_DEFAULT_MODE}.png`,
+      `/Pictures/SwiftMask/pasted-image-nobg-${PREFERRED_DEFAULT_MODE}.png`,
+    ]);
+  });
+
+  it("uses configured output for pixels inside a folder queue", async () => {
+    queueStore.getState().activateWithItems(
+      [
+        {
+          id: "folder-image",
+          inputPath: "/photos/original.jpg",
+          outputPath: "/photos-nobg/original.png",
+          status: "done",
+          progress: 100,
+          stage: null,
+          error: null,
+          jobId: null,
+        },
+      ],
+      {
+        kind: "folder",
+        path: "/photos",
+        outputDir: "/photos-nobg",
+        watch: false,
+      },
+    );
+    enqueueClipboardImages(
+      ["/cache/pasted-image.png"],
+      { mode: PREFERRED_DEFAULT_MODE, outputDir: "/exports" },
+      "/Pictures/SwiftMask",
+    );
+    let outputPath = "";
+    await startQueueProcess(
+      baseDeps({
+        getSettings: () => ({
+          mode: PREFERRED_DEFAULT_MODE,
+          outputDir: "/exports",
+        }),
+        removeBackground: async (job) => {
+          outputPath = job.outputPath;
+        },
+      }),
+    );
+    expect(outputPath).toBe(
+      `/exports/pasted-image-nobg-${PREFERRED_DEFAULT_MODE}.png`,
     );
   });
 

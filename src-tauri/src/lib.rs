@@ -1,3 +1,4 @@
+pub mod clipboard_import;
 pub mod commands;
 mod config;
 pub mod download;
@@ -16,6 +17,10 @@ pub mod processing;
 
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            crate::clipboard_import::cleanup_session(app.handle());
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -46,7 +51,13 @@ pub fn run() {
             commands::watch_folder_stop,
             commands::get_runtime_info,
             commands::get_config,
+            commands::import_clipboard_images,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                crate::clipboard_import::cleanup_session(app);
+            }
+        });
 }

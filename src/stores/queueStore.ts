@@ -29,6 +29,8 @@ export type QueueItem = {
    * user hits Process (which drains all pending).
    */
   fromWatch?: boolean;
+  /** Native fallback output directory attached to pasted clipboard pixels. */
+  defaultOutputDir?: string | null;
 };
 
 export type QueueSource =

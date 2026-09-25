@@ -29,6 +29,9 @@ describe("keyboardShortcuts", () => {
         "process",
       );
       expect(matchShortcutKey(keyEvent({ key: "Escape" }))).toBe("cancel");
+      expect(matchShortcutKey(keyEvent({ key: "v", ctrlKey: true }))).toBe(
+        "paste",
+      );
     });
 
     it("ignores unrelated keys", () => {
@@ -36,6 +39,12 @@ describe("keyboardShortcuts", () => {
       expect(matchShortcutKey(keyEvent({ key: "o" }))).toBeNull();
       expect(
         matchShortcutKey(keyEvent({ key: "p", ctrlKey: true })),
+      ).toBeNull();
+      expect(
+        matchShortcutKey(keyEvent({ key: "v", ctrlKey: true, shiftKey: true })),
+      ).toBeNull();
+      expect(
+        matchShortcutKey(keyEvent({ key: "v", ctrlKey: true, altKey: true })),
       ).toBeNull();
     });
   });

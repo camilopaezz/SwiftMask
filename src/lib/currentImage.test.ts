@@ -110,6 +110,21 @@ describe("currentImage", () => {
       );
     });
 
+    it("uses pasted pixel fallback unless a configured output directory exists", () => {
+      imageStore.getState().set({
+        ...makeReadyItem(),
+        defaultOutputDir: "/Pictures/SwiftMask",
+      });
+      syncOutputPath({ mode: "rmbg-2.0", outputDir: null });
+      expect(imageStore.getState().current?.outputPath).toBe(
+        "/Pictures/SwiftMask/in-nobg-rmbg-2.0.png",
+      );
+      syncOutputPath({ mode: "rmbg-2.0", outputDir: "/exports" });
+      expect(imageStore.getState().current?.outputPath).toBe(
+        "/exports/in-nobg-rmbg-2.0.png",
+      );
+    });
+
     it("skips when processing", () => {
       imageStore.getState().set({
         ...makeReadyItem({ outputPath: "/tmp/old.png" }),

@@ -139,6 +139,12 @@
       "body": "The job may still be running. Click Cancel again."
     }
   },
+  "paste": {
+    "busy": {
+      "title": "Already processing",
+      "body": "Wait for the current image to finish processing before pasting another image."
+    }
+  },
   "queue": {
     "replaceLive": "Replace the current queue? Pending work will be cancelled.",
     "replaceIdle": "Replace the current queue with this folder?",
@@ -332,7 +338,7 @@
     "dropToStart": "Drop images or a folder to start a queue",
     "dropNow": "Drop images or a folder",
     "formats": "PNG, JPG, WEBP, BMP",
-    "hint": "Select image · Ctrl+O · Open folder · Ctrl+Shift+O",
+    "hint": "Select image · Ctrl+O · Paste image · Ctrl+V · Open folder · Ctrl+Shift+O",
     "before": "Before",
     "after": "After",
     "compareAria": "Before and after comparison",
