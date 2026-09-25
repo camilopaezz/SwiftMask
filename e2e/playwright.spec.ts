@@ -1,90 +1,25 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { expect, type Page, test } from "@playwright/test";
-import { MODEL_REGISTRY } from "../src/lib/models";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE_PATH = path.join(__dirname, "fixtures", "sample.png");
-
-const DEFAULT_CONFIG = {
-  config: {
-    execution_provider: "cpu",
-    output_dir: "/swiftmask/e2e/output",
-  },
-  gpuInfo: {
-    vendor: "NVIDIA",
-    vram_bytes: 4_000_000_000,
-    available_eps: ["cuda", "cpu"],
-    optimization: "Level1 (<4 GiB)",
-  },
-  benchmarkResult: {
-    ep_latencies: [
-      { ep: "cpu", seconds: 0.5 },
-      { ep: "cuda", seconds: 0.1 },
-    ],
-    winner_ep: "cpu",
-  },
-  models: MODEL_REGISTRY.map((m) => ({
-    ...m,
-    // Balanced ready — Turbo is benchmark-only and hidden from the UI.
-    downloaded: m.bundled || m.id === "isnet-general-use",
-  })),
-};
-
-const E2E_FIXTURE_PATH = "/swiftmask/e2e/fixtures/sample.png";
-
-async function bootAndLoadFixture(page: Page) {
-  await page.goto("/");
-  await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
-
-  await page.evaluate((fixturePath) => {
-    const hook = window.__swiftmaskInjectDrop;
-    if (!hook) {
-      throw new Error("E2E drop hook not available");
-    }
-    hook([fixturePath]);
-  }, E2E_FIXTURE_PATH);
-
-  await expect(page.getByRole("button", { name: /process/i })).toBeEnabled();
-}
+import { expect, test } from "@playwright/test";
+import {
+  boot,
+  bootAndLoadFixture,
+  E2E_FIXTURE_PATH,
+  injectDrop,
+  installMock,
+  mockCalls,
+} from "./helpers";
 
 test.describe("SwiftMask", () => {
   test.beforeEach(async ({ page }) => {
-    const fixtureBytes = await readFile(FIXTURE_PATH);
-
-    await page.addInitScript(
-      ({ config, fixtureArray }) => {
-        localStorage.removeItem("swiftmask:nc-license-ack");
-        window.__SWIFTMASK_MOCK__ = {
-          config,
-          listeners: {},
-          calls: [],
-          fixtureBytes: new Uint8Array(fixtureArray),
-        };
-      },
-      {
-        config: DEFAULT_CONFIG,
-        fixtureArray: Array.from(fixtureBytes),
-      },
-    );
+    await installMock(page);
   });
 
   test("end-to-end mocked flow", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
+    await boot(page);
 
-    const inputPath = "/swiftmask/e2e/fixtures/sample.png";
     const expectedOutputPath =
       "/swiftmask/e2e/output/sample-nobg-isnet-general-use.png";
 
-    await page.evaluate((path) => {
-      const hook = window.__swiftmaskInjectDrop;
-      if (!hook) {
-        throw new Error("E2E drop hook not available");
-      }
-      hook([path]);
-    }, inputPath);
+    await injectDrop(page, [E2E_FIXTURE_PATH]);
 
     // Click "Process" button to trigger handleProcess ->
     // invokeRemoveImageBackground -> tauriInvoke("remove_image_background")
@@ -93,13 +28,7 @@ test.describe("SwiftMask", () => {
     await expect
       .poll(
         async () => {
-          const calls = await page.evaluate(() => {
-            const state = window.__SWIFTMASK_MOCK__;
-            if (!state) {
-              throw new Error("SwiftMask mock state not available");
-            }
-            return state.calls;
-          });
+          const calls = await mockCalls(page);
           return calls.some(
             (call) =>
               call.cmd === "remove_image_background" &&
@@ -138,13 +67,7 @@ test.describe("SwiftMask", () => {
     await expect
       .poll(
         async () => {
-          const calls = await page.evaluate(() => {
-            const state = window.__SWIFTMASK_MOCK__;
-            if (!state) {
-              throw new Error("SwiftMask mock state not available");
-            }
-            return state.calls;
-          });
+          const calls = await mockCalls(page);
           return calls.some(
             (call) =>
               call.cmd === "remove_image_background" &&
@@ -169,13 +92,7 @@ test.describe("SwiftMask", () => {
     await expect
       .poll(
         async () => {
-          const calls = await page.evaluate(() => {
-            const state = window.__SWIFTMASK_MOCK__;
-            if (!state) {
-              throw new Error("SwiftMask mock state not available");
-            }
-            return state.calls;
-          });
+          const calls = await mockCalls(page);
           return calls.some((call) => call.cmd === "cancel_inference");
         },
         { timeout: 10_000 },
@@ -216,8 +133,7 @@ test.describe("SwiftMask", () => {
   });
 
   test("process error shows friendly footer copy", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
+    await boot(page);
 
     await page.evaluate(() => {
       const state = window.__SWIFTMASK_MOCK__;
@@ -225,11 +141,7 @@ test.describe("SwiftMask", () => {
       state.inferenceMode = "error";
     });
 
-    await page.evaluate((fixturePath) => {
-      const hook = window.__swiftmaskInjectDrop;
-      if (!hook) throw new Error("E2E drop hook not available");
-      hook([fixturePath]);
-    }, E2E_FIXTURE_PATH);
+    await injectDrop(page, [E2E_FIXTURE_PATH]);
 
     await page.getByRole("button", { name: /process/i }).click();
 
@@ -248,8 +160,7 @@ test.describe("SwiftMask", () => {
   test("GPU fallback shows sticky notice and still completes", async ({
     page,
   }) => {
-    await page.goto("/");
-    await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
+    await boot(page);
 
     await page.evaluate(() => {
       const state = window.__SWIFTMASK_MOCK__;
@@ -257,11 +168,7 @@ test.describe("SwiftMask", () => {
       state.inferenceMode = "fallback";
     });
 
-    await page.evaluate((fixturePath) => {
-      const hook = window.__swiftmaskInjectDrop;
-      if (!hook) throw new Error("E2E drop hook not available");
-      hook([fixturePath]);
-    }, E2E_FIXTURE_PATH);
+    await injectDrop(page, [E2E_FIXTURE_PATH]);
 
     await page.getByRole("button", { name: /process/i }).click();
 
@@ -304,8 +211,7 @@ test.describe("SwiftMask", () => {
   test("Settings About panel: Escape, focus, no GPU re-fetch", async ({
     page,
   }) => {
-    await page.goto("/");
-    await expect(page.getByText(/Drop images or a folder/i)).toBeVisible();
+    await boot(page);
 
     const settingsBtn = page.getByRole("button", { name: "Settings" });
     await settingsBtn.click();
@@ -318,19 +224,14 @@ test.describe("SwiftMask", () => {
 
     await expect
       .poll(async () => {
-        return page.evaluate(() => {
-          const state = window.__SWIFTMASK_MOCK__;
-          if (!state) throw new Error("mock missing");
-          return state.calls.filter((c) => c.cmd === "detect_gpu").length;
-        });
+        const calls = await mockCalls(page);
+        return calls.filter((c) => c.cmd === "detect_gpu").length;
       })
       .toBeGreaterThan(0);
 
-    const gpuAfterOpen = await page.evaluate(() => {
-      const state = window.__SWIFTMASK_MOCK__;
-      if (!state) throw new Error("mock missing");
-      return state.calls.filter((c) => c.cmd === "detect_gpu").length;
-    });
+    const gpuAfterOpen = (await mockCalls(page)).filter(
+      (c) => c.cmd === "detect_gpu",
+    ).length;
 
     await page.getByRole("button", { name: "About & licenses" }).click();
     await expect(
@@ -354,11 +255,9 @@ test.describe("SwiftMask", () => {
       page.getByRole("button", { name: "About & licenses" }),
     ).toBeFocused();
 
-    const gpuAfterAboutRoundTrip = await page.evaluate(() => {
-      const state = window.__SWIFTMASK_MOCK__;
-      if (!state) throw new Error("mock missing");
-      return state.calls.filter((c) => c.cmd === "detect_gpu").length;
-    });
+    const gpuAfterAboutRoundTrip = (await mockCalls(page)).filter(
+      (c) => c.cmd === "detect_gpu",
+    ).length;
     expect(gpuAfterAboutRoundTrip).toBe(gpuAfterOpen);
 
     await page.keyboard.press("Escape");

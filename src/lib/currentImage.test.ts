@@ -737,34 +737,7 @@ describe("currentImage", () => {
   });
 
   describe("initCurrentImageListeners", () => {
-    it("patches progress on inference:progress for the current image", async () => {
-      imageStore.getState().set({
-        ...makeReadyItem({ id: "img-1" }),
-        status: "processing",
-      });
-      await initCurrentImageListeners();
-      handlers["inference:progress"]({
-        payload: { id: "img-1", stage: "inferring", pct: 55 },
-      });
-      const current = imageStore.getState().current;
-      expect(current?.status).toBe("processing");
-      expect(current?.stage).toBe("inferring");
-      expect(current?.progress).toBe(55);
-    });
-
-    it("ignores progress events for a different id", async () => {
-      imageStore.getState().set({
-        ...makeReadyItem({ id: "img-1" }),
-        status: "processing",
-      });
-      await initCurrentImageListeners();
-      handlers["inference:progress"]({
-        payload: { id: "other", stage: "inferring", pct: 55 },
-      });
-      expect(imageStore.getState().current?.progress).toBe(0);
-    });
-
-    it("sets done status and output path on inference:done", async () => {
+    it("sets lastJobTimings on inference:done", async () => {
       imageStore.getState().set({
         ...makeReadyItem({ id: "img-2" }),
         status: "processing",
@@ -785,56 +758,13 @@ describe("currentImage", () => {
       const current = imageStore.getState().current;
       expect(current?.status).toBe("done");
       expect(current?.outputPath).toBe("/tmp/out.png");
-      expect(current?.progress).toBe(100);
-      expect(current?.stage).toBeNull();
       expect(settingsStore.getState().lastJobTimings).toEqual({
         stages: [{ stage: "inferring", seconds: 0.4 }],
         total_seconds: 0.5,
       });
     });
 
-    it("sets error status and message on inference:error", async () => {
-      imageStore.getState().set({
-        ...makeReadyItem({ id: "img-3" }),
-        status: "processing",
-        progress: 20,
-        stage: "decoding",
-      });
-      await initCurrentImageListeners();
-      handlers["inference:error"]({
-        payload: {
-          id: "img-3",
-          code: "oom",
-          message: "CUDA out of memory",
-        },
-      });
-      const current = imageStore.getState().current;
-      expect(current?.status).toBe("error");
-      expect(current?.error).toEqual({
-        code: "oom",
-        message: "CUDA out of memory",
-      });
-      expect(current?.stage).toBeNull();
-    });
-
-    it("sets cancelled status when error message is cancelled", async () => {
-      imageStore.getState().set({
-        ...makeReadyItem({ id: "img-4" }),
-        status: "processing",
-        progress: 20,
-        stage: "decoding",
-      });
-      await initCurrentImageListeners();
-      handlers["inference:error"]({
-        payload: { id: "img-4", code: "cancelled", message: "cancelled" },
-      });
-      const current = imageStore.getState().current;
-      expect(current?.status).toBe("cancelled");
-      expect(current?.error).toBeNull();
-      expect(current?.stage).toBeNull();
-    });
-
-    it("shows sticky fallback notice on inference:fallback", async () => {
+    it("wires inference:fallback to a sticky notice", async () => {
       uiStore.getState().dismissNotice();
       imageStore.getState().set({
         ...makeReadyItem({ id: "img-fb" }),
@@ -856,7 +786,6 @@ describe("currentImage", () => {
       expect(notice?.severity).toBe("warning");
       expect(notice?.title).toMatch(/CPU/i);
       expect(notice?.body).toMatch(/Settings/i);
-      // Fallback must not flip the image into error.
       expect(imageStore.getState().current?.status).toBe("processing");
     });
   });

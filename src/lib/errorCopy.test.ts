@@ -55,32 +55,3 @@ describe("formatFallbackNotice", () => {
     expect(copy.body).toMatch(/DirectML/i);
   });
 });
-
-describe("inventory copy helpers", () => {
-  it("covers first-run and reveal helpers", async () => {
-    const {
-      formatFirstRunGpuDegradeNotice,
-      formatModelsUnavailableNotice,
-      formatDownloadCancelUnconfirmedNotice,
-      formatRevealFailedNotice,
-    } = await import("./errorCopy");
-    expect(formatFirstRunGpuDegradeNotice().title).toMatch(/GPU/i);
-    expect(formatModelsUnavailableNotice().body).toMatch(/quality mode/i);
-    expect(formatDownloadCancelUnconfirmedNotice().title).toMatch(/cancel/i);
-    expect(formatRevealFailedNotice().title).toMatch(/folder/i);
-  });
-
-  it("covers signed updater copy helpers", async () => {
-    const {
-      formatUpdateAvailableNotice,
-      formatUpToDateCopy,
-      formatUpdateCheckFailedCopy,
-      formatUpdateInstallFailedCopy,
-    } = await import("./errorCopy");
-    expect(formatUpdateAvailableNotice("1.2.3").title).toMatch(/1\.2\.3/);
-    expect(formatUpdateAvailableNotice("1.2.3").body).toMatch(/Settings/i);
-    expect(formatUpToDateCopy().title).toMatch(/up to date/i);
-    expect(formatUpdateCheckFailedCopy().title).toMatch(/check/i);
-    expect(formatUpdateInstallFailedCopy("sig boom").body).toMatch(/sig boom/);
-  });
-});

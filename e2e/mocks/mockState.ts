@@ -33,6 +33,16 @@ export type MockState = {
    * and the flag is cleared.
    */
   failNextDownload?: boolean;
+  /** Milliseconds until a successful `download_model` completes. Default 100. */
+  downloadDelayMs?: number;
+  dialogOpenResult?: string | null;
+  dialogAskResult?: boolean;
+  dialogMessageResult?: string;
+  pickFolderResult?: string | null;
+  pickOutputDirResult?: string | null;
+  folderImages?: Record<string, string[]>;
+  existingPaths?: string[];
+  folderPaths?: string[];
 };
 
 /** Mock list_models payload: generated static registry + runtime downloaded flags. */
@@ -79,6 +89,14 @@ export function getMockState(): MockState {
       listeners: {},
       calls: [],
       fixtureBytes: new Uint8Array(),
+      dialogOpenResult: null,
+      dialogAskResult: true,
+      dialogMessageResult: "Ok",
+      pickFolderResult: null,
+      pickOutputDirResult: null,
+      folderImages: {},
+      existingPaths: [],
+      folderPaths: [],
     };
   }
   return w.__SWIFTMASK_MOCK__;

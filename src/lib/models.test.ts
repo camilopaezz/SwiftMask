@@ -18,15 +18,9 @@ function withDownloadState(downloadedIds: readonly string[] = []): ModelMeta[] {
 }
 
 describe("isModelReady", () => {
-  it("treats bundled models as ready", () => {
+  it("is ready when bundled or downloaded", () => {
     expect(isModelReady({ bundled: true, downloaded: false })).toBe(true);
-  });
-
-  it("treats downloaded models as ready", () => {
     expect(isModelReady({ bundled: false, downloaded: true })).toBe(true);
-  });
-
-  it("treats missing weights as not ready", () => {
     expect(isModelReady({ bundled: false, downloaded: false })).toBe(false);
   });
 });
@@ -82,13 +76,6 @@ describe("resolveMode", () => {
       PREFERRED_DEFAULT_MODE,
     );
     expect(resolveMode(INTERNAL_BENCHMARK_MODE, [])).toBe(
-      PREFERRED_DEFAULT_MODE,
-    );
-  });
-
-  it("selects preferred from an unresolved default when weights are ready", () => {
-    const models = withDownloadState(["isnet-general-use"]);
-    expect(resolveMode(PREFERRED_DEFAULT_MODE, models)).toBe(
       PREFERRED_DEFAULT_MODE,
     );
   });

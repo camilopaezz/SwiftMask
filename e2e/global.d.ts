@@ -22,6 +22,15 @@ interface Window {
     fixtureBytes: Uint8Array;
     inferenceMode?: "success" | "error" | "fallback";
     failNextDownload?: boolean;
+    downloadDelayMs?: number;
+    dialogOpenResult?: string | null;
+    dialogAskResult?: boolean;
+    dialogMessageResult?: string;
+    pickFolderResult?: string | null;
+    pickOutputDirResult?: string | null;
+    folderImages?: Record<string, string[]>;
+    existingPaths?: string[];
+    folderPaths?: string[];
   };
   __swiftmaskInjectDrop?: (paths: string[]) => void;
 }
