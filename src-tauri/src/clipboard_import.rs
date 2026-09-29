@@ -189,14 +189,13 @@ fn clipboard_file_path(file: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::{clipboard_file_path, is_supported_image_path};
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
     #[test]
     fn decodes_file_uri_paths() {
-        assert_eq!(
-            clipboard_file_path("file:///tmp/my%20image.PNG"),
-            Some(PathBuf::from("/tmp/my image.PNG"))
-        );
+        let path = std::env::temp_dir().join("my image.PNG");
+        let uri = url::Url::from_file_path(&path).expect("absolute file path");
+        assert_eq!(clipboard_file_path(uri.as_str()), Some(path));
         assert_eq!(clipboard_file_path("https://example.com/image.png"), None);
     }
 
