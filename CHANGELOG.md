@@ -6,6 +6,13 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-28
+
+### Added
+
+- Paste copied image files or image pixels with Ctrl+V; multiple files enter the batch queue
+- Expanded end-to-end coverage for queue, folder watch, and settings
+
 ### Fixed
 
 - Single-image cancel can be retried if IPC cancel fails instead of wedging Process
