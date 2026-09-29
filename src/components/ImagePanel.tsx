@@ -1,8 +1,10 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { isUiLocked } from "../lib/busy";
 import {
   cancelProcess,
+  isCancelPending,
   isProcessBusy,
   prodCancelDeps,
   prodStartProcessDeps,
@@ -15,6 +17,7 @@ import { showAppErrorNotice } from "../lib/showAppErrorNotice";
 import { type ImageItem, useImageStore } from "../stores/imageStore";
 import { fileNameFromPath, useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
+import { useUiStore } from "../stores/uiStore";
 import { ProgressBar, stageLabel } from "./ProgressBar";
 
 function statusLabel(item: ImageItem, t: (key: string) => string): string {
@@ -42,6 +45,9 @@ export function ImagePanel() {
   const queueRunning = useQueueStore((state) => state.running);
   const mode = useSettingsStore((state) => state.mode);
   const models = useSettingsStore((state) => state.models);
+  const modalBlocksShortcuts = useUiStore(
+    (state) => state.modalBlocksShortcuts,
+  );
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancellingRef = useRef(false);
@@ -49,7 +55,7 @@ export function ImagePanel() {
   const isProcessing = current?.status === "processing";
   const showCancel = queueActive
     ? queueRunning || cancelling
-    : isProcessing || cancelling;
+    : isProcessing || cancelling || isCancelPending();
   const hasImage = Boolean(current);
   const isDone = current?.status === "done";
   const canShowInFolder = isDone && Boolean(current?.outputPath);
@@ -64,11 +70,16 @@ export function ImagePanel() {
   const processDisabled = queueActive
     ? starting ||
       cancelling ||
-      queueRunning ||
+      isUiLocked() ||
       pendingCount === 0 ||
       !modeReady ||
-      isProcessBusy()
-    : !hasImage || starting || cancelling || !modeReady || isProcessBusy();
+      modalBlocksShortcuts
+    : !hasImage ||
+      starting ||
+      cancelling ||
+      !modeReady ||
+      isProcessBusy() ||
+      modalBlocksShortcuts;
 
   const handleProcess = async () => {
     if (processDisabled) return;
@@ -96,7 +107,7 @@ export function ImagePanel() {
       });
       return;
     }
-    if (!isProcessing) return;
+    if (!isProcessing && !isCancelPending()) return;
     cancellingRef.current = true;
     setCancelling(true);
     void cancelProcess(prodCancelDeps()).finally(() => {

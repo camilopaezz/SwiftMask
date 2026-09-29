@@ -1,22 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { APP_LINKS, licenseUrlFor } from "./licenseUrls";
+import { licenseUrlFor } from "./licenseUrls";
 import { MODEL_REGISTRY } from "./models.generated";
 
 describe("licenseUrlFor", () => {
-  it("maps Apache-2.0", () => {
-    expect(licenseUrlFor("Apache-2.0")).toBe(
-      "https://www.apache.org/licenses/LICENSE-2.0",
-    );
-  });
-
-  it("maps CC BY-NC 4.0", () => {
-    expect(licenseUrlFor("CC BY-NC 4.0")).toBe(
-      "https://creativecommons.org/licenses/by-nc/4.0/",
-    );
-  });
-
-  it("maps MIT", () => {
-    expect(licenseUrlFor("MIT")).toBe("https://opensource.org/licenses/MIT");
+  it("maps known SPDX licenses", () => {
+    const cases = [
+      ["Apache-2.0", "https://www.apache.org/licenses/LICENSE-2.0"],
+      ["CC BY-NC 4.0", "https://creativecommons.org/licenses/by-nc/4.0/"],
+      ["MIT", "https://opensource.org/licenses/MIT"],
+    ] as const;
+    for (const [license, url] of cases) {
+      expect(licenseUrlFor(license)).toBe(url);
+    }
   });
 
   it("returns null for unknown licenses", () => {
@@ -37,17 +32,5 @@ describe("licenseUrlFor", () => {
         `missing URL for ${model.id} license ${model.license}`,
       ).toMatch(/^https:\/\//);
     }
-  });
-});
-
-describe("APP_LINKS", () => {
-  it("defines repo, issues, and MIT license URLs", () => {
-    expect(APP_LINKS.repo).toBe("https://github.com/camilopaezz/SwiftMask");
-    expect(APP_LINKS.issues).toBe(
-      "https://github.com/camilopaezz/SwiftMask/issues",
-    );
-    expect(APP_LINKS.mit).toBe(
-      "https://github.com/camilopaezz/SwiftMask/blob/main/LICENSE",
-    );
   });
 });

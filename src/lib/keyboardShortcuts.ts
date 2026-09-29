@@ -1,4 +1,9 @@
-export type ShortcutKey = "open" | "openFolder" | "process" | "cancel";
+export type ShortcutKey =
+  | "open"
+  | "openFolder"
+  | "process"
+  | "cancel"
+  | "paste";
 
 export type ShortcutContext = {
   enabled: boolean;
@@ -7,9 +12,25 @@ export type ShortcutContext = {
   isBusy: boolean;
 };
 
+export function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.isContentEditable ||
+    target.closest("input, textarea, select, [contenteditable='true']") !== null
+  );
+}
+
 /** Map a keydown event to a shortcut key, ignoring context. */
 export function matchShortcutKey(event: KeyboardEvent): ShortcutKey | null {
   if (event.key === "Escape") return "cancel";
+  if (
+    (event.ctrlKey || event.metaKey) &&
+    !event.shiftKey &&
+    !event.altKey &&
+    event.key.toLowerCase() === "v"
+  ) {
+    return "paste";
+  }
   if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "o") {
     return "openFolder";
   }
@@ -29,6 +50,10 @@ export function resolveShortcutAction(
     case "open":
     case "openFolder":
       return ctx.isBusy ? null : key;
+    case "paste":
+      // The paste workflow reports single-image busy state itself; queues may
+      // always accept appended clipboard images while processing.
+      return key;
     case "process":
       return ctx.isBusy || !ctx.hasImage ? null : "process";
     case "cancel":

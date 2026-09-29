@@ -12,16 +12,8 @@ pub fn preprocess(model: &ModelEntry, image: &DynamicImage) -> Result<Array4<f32
     for (x, y, pix) in rgb.enumerate_pixels() {
         for c in 0..3 {
             let v = pix[c] as f32 / 255.0;
-            let mean = if model.mean.len() == 1 {
-                model.mean[0]
-            } else {
-                model.mean.get(c).copied().unwrap_or(0.0)
-            };
-            let std = if model.std.len() == 1 {
-                model.std[0]
-            } else {
-                model.std.get(c).copied().unwrap_or(1.0)
-            };
+            let mean = model.mean.get(c).copied().unwrap_or(0.0);
+            let std = model.std.get(c).copied().unwrap_or(1.0);
             tensor[[0, c, y as usize, x as usize]] = (v - mean) / std;
         }
     }
@@ -29,20 +21,16 @@ pub fn preprocess(model: &ModelEntry, image: &DynamicImage) -> Result<Array4<f32
 }
 
 pub fn postprocess(
-    model_id: &str,
+    model: &ModelEntry,
     original_size: (u32, u32),
     output: &ndarray::ArrayD<f32>,
 ) -> Result<GrayImage, AppError> {
-    match model_id {
-        "u2netp" | "isnet-general-use" | "rmbg-1.4" | "rmbg-2.0" => {
-            postprocess_minmax(original_size, output)
-        }
+    match model.postprocess {
+        crate::models::PostprocessKind::MinMax => postprocess_minmax(original_size, output),
         // BiRefNet logits: sigmoid then min-max (raw min-max on unbounded logits is washed).
-        "birefnet-general-lite" => postprocess_sigmoid_minmax(original_size, output),
-        _ => Err(AppError::Pipeline(format!(
-            "unknown postprocess model_id {}",
-            model_id
-        ))),
+        crate::models::PostprocessKind::SigmoidMinMax => {
+            postprocess_sigmoid_minmax(original_size, output)
+        }
     }
 }
 
@@ -60,10 +48,7 @@ fn postprocess_sigmoid_minmax(
     output: &ndarray::ArrayD<f32>,
 ) -> Result<GrayImage, AppError> {
     let (h, w, logits) = extract_logits(output)?;
-    let probs: Vec<f32> = logits
-        .iter()
-        .map(|&v| 1.0 / (1.0 + (-v).exp()))
-        .collect();
+    let probs: Vec<f32> = logits.iter().map(|&v| 1.0 / (1.0 + (-v).exp())).collect();
     normalize_resize_feather(original_size, h, w, &probs)
 }
 
@@ -85,8 +70,12 @@ fn normalize_resize_feather(
             mask.put_pixel(x as u32, y as u32, image::Luma([p]));
         }
     }
-    let resized =
-        image::imageops::resize(&mask, original_size.0, original_size.1, FilterType::Lanczos3);
+    let resized = image::imageops::resize(
+        &mask,
+        original_size.0,
+        original_size.1,
+        FilterType::Lanczos3,
+    );
     // Light Gaussian feathering on the mask edges keeps hair/fur borders from looking
     // pixelated and hard after resizing back to the original resolution.
     let feathered = image::imageops::blur(&resized, 1.0);
@@ -120,11 +109,8 @@ mod tests {
     #[test]
     fn preprocess_shape_and_red_channel_value() {
         let u2netp = find_model("u2netp").unwrap();
-        let img = DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
-            64,
-            64,
-            image::Rgb([255, 0, 0]),
-        ));
+        let img =
+            DynamicImage::ImageRgb8(image::RgbImage::from_pixel(64, 64, image::Rgb([255, 0, 0])));
         let tensor = preprocess(u2netp, &img).unwrap();
         assert_eq!(tensor.shape(), &[1, 3, 320, 320]);
         let red = tensor[[0, 0, 10, 10]];
@@ -134,11 +120,8 @@ mod tests {
     #[test]
     fn preprocess_isnet_uses_half_range_normalization() {
         let isnet = find_model("isnet-general-use").unwrap();
-        let img = DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
-            64,
-            64,
-            image::Rgb([255, 0, 0]),
-        ));
+        let img =
+            DynamicImage::ImageRgb8(image::RgbImage::from_pixel(64, 64, image::Rgb([255, 0, 0])));
         let tensor = preprocess(isnet, &img).unwrap();
         assert_eq!(tensor.shape(), &[1, 3, 1024, 1024]);
         let red = tensor[[0, 0, 10, 10]];
@@ -150,11 +133,8 @@ mod tests {
     fn preprocess_birefnet_general_lite_is_512_imagenet() {
         // High mode: 512² + ImageNet mean/std (studioludens/birefnet-lite-512).
         let biref = find_model("birefnet-general-lite").unwrap();
-        let img = DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
-            64,
-            64,
-            image::Rgb([255, 0, 0]),
-        ));
+        let img =
+            DynamicImage::ImageRgb8(image::RgbImage::from_pixel(64, 64, image::Rgb([255, 0, 0])));
         let tensor = preprocess(biref, &img).unwrap();
         assert_eq!(tensor.shape(), &[1, 3, 512, 512]);
         let red = tensor[[0, 0, 10, 10]];
@@ -171,8 +151,9 @@ mod tests {
                 data.push(nx + ny - 1.0);
             }
         }
-        let output = ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 64, 64]), data).unwrap();
-        let mask = postprocess("u2netp", (64, 64), &output).unwrap();
+        let output =
+            ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 64, 64]), data).unwrap();
+        let mask = postprocess(find_model("u2netp").unwrap(), (64, 64), &output).unwrap();
         assert_eq!(mask.dimensions(), (64, 64));
         let min_pixel = mask.pixels().map(|p| p[0]).min().unwrap();
         let max_pixel = mask.pixels().map(|p| p[0]).max().unwrap();
@@ -185,12 +166,10 @@ mod tests {
 
     #[test]
     fn postprocess_uniform_tensor_returns_zeros() {
-        let output = ndarray::ArrayD::from_shape_vec(
-            ndarray::IxDyn(&[1, 1, 2, 2]),
-            vec![0.5f32; 4],
-        )
-        .unwrap();
-        let mask = postprocess("u2netp", (2, 2), &output).unwrap();
+        let output =
+            ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 2, 2]), vec![0.5f32; 4])
+                .unwrap();
+        let mask = postprocess(find_model("u2netp").unwrap(), (2, 2), &output).unwrap();
         assert_eq!(mask.dimensions(), (2, 2));
         for y in 0..2 {
             for x in 0..2 {
@@ -209,8 +188,9 @@ mod tests {
                 data.push(v);
             }
         }
-        let output = ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 16, 16]), data).unwrap();
-        let mask = postprocess("rmbg-1.4", (16, 16), &output).unwrap();
+        let output =
+            ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 16, 16]), data).unwrap();
+        let mask = postprocess(find_model("rmbg-1.4").unwrap(), (16, 16), &output).unwrap();
         assert_eq!(mask.dimensions(), (16, 16));
         let min_pixel = mask.pixels().map(|p| p[0]).min().unwrap();
         let max_pixel = mask.pixels().map(|p| p[0]).max().unwrap();
@@ -231,8 +211,10 @@ mod tests {
                 data.push(v);
             }
         }
-        let output = ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 16, 16]), data).unwrap();
-        let mask = postprocess("isnet-general-use", (16, 16), &output).unwrap();
+        let output =
+            ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 16, 16]), data).unwrap();
+        let mask =
+            postprocess(find_model("isnet-general-use").unwrap(), (16, 16), &output).unwrap();
         assert_eq!(mask.dimensions(), (16, 16));
         let min_pixel = mask.pixels().map(|p| p[0]).min().unwrap();
         let max_pixel = mask.pixels().map(|p| p[0]).max().unwrap();
@@ -255,8 +237,14 @@ mod tests {
                 data.push(v);
             }
         }
-        let output = ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 16, 16]), data).unwrap();
-        let mask = postprocess("birefnet-general-lite", (16, 16), &output).unwrap();
+        let output =
+            ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 16, 16]), data).unwrap();
+        let mask = postprocess(
+            find_model("birefnet-general-lite").unwrap(),
+            (16, 16),
+            &output,
+        )
+        .unwrap();
         assert_eq!(mask.dimensions(), (16, 16));
         let min_pixel = mask.pixels().map(|p| p[0]).min().unwrap();
         let max_pixel = mask.pixels().map(|p| p[0]).max().unwrap();
@@ -273,14 +261,13 @@ mod tests {
     }
 
     #[test]
-    fn postprocess_unknown_model_returns_error() {
-        let output = ndarray::ArrayD::from_shape_vec(
-            ndarray::IxDyn(&[1, 1, 2, 2]),
-            vec![0.0f32; 4],
-        )
-        .unwrap();
-        let result = postprocess("unknown", (2, 2), &output);
-        assert!(result.is_err());
+    fn every_registry_entry_has_postprocess() {
+        let output =
+            ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[1, 1, 2, 2]), vec![0.1f32; 4])
+                .unwrap();
+        for model in crate::models::static_registry() {
+            postprocess(model, (2, 2), &output)
+                .unwrap_or_else(|e| panic!("{} postprocess failed: {e}", model.id));
+        }
     }
-
 }

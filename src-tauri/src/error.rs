@@ -173,9 +173,7 @@ pub fn is_storage_full(err: &std::io::Error) -> bool {
         return true;
     }
     let msg = err.to_string().to_ascii_lowercase();
-    msg.contains("no space left")
-        || msg.contains("not enough space")
-        || msg.contains("disk full")
+    msg.contains("no space left") || msg.contains("not enough space") || msg.contains("disk full")
 }
 
 /// Product catalog code for FE copy maps and control flow (`cancelled`, `busy`, …).
@@ -260,10 +258,7 @@ mod tests {
             error_code(&AppError::ModelCorrupt("SHA-256 mismatch for x".into())),
             code::MODEL_CORRUPT
         );
-        assert_eq!(
-            error_code(&model_not_ready("isnet")),
-            code::MODEL_NOT_READY
-        );
+        assert_eq!(error_code(&model_not_ready("isnet")), code::MODEL_NOT_READY);
         assert_eq!(error_code(&model_unknown("nope")), code::MODEL_UNKNOWN);
         assert_eq!(
             error_code(&network_error("request failed: timeout")),
@@ -326,7 +321,7 @@ mod tests {
 
     #[test]
     fn io_disk_full_via_os_message() {
-        let e = std::io::Error::new(std::io::ErrorKind::Other, "No space left on device");
+        let e = std::io::Error::other("No space left on device");
         assert!(is_storage_full(&e));
         assert_eq!(error_code(&AppError::Io(e)), code::DISK_FULL);
     }
@@ -351,7 +346,7 @@ mod tests {
 
     #[test]
     fn model_io_error_tags_disk_full() {
-        let e = std::io::Error::new(std::io::ErrorKind::Other, "No space left on device");
+        let e = std::io::Error::other("No space left on device");
         let err = model_io_error("write", e);
         assert_eq!(error_code(&err), code::DISK_FULL);
         assert!(error_message(&err).contains("disk full"));

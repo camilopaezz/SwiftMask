@@ -12,8 +12,7 @@ const STAGE_KEYS: Record<string, string> = {
   "inferring-cpu": "stages.inferringCpu",
   postprocessing: "stages.postprocessing",
   encoding: "stages.encoding",
-  Processing: "stages.processing",
-  processing: "stages.processing",
+  starting: "status.starting",
 };
 
 export function stageLabel(

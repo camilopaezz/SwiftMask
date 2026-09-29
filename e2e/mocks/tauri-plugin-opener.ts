@@ -1,4 +1,7 @@
-export function revealItemInDir(_path: string | string[]): Promise<void> {
+import { getMockState } from "./mockState";
+
+export function revealItemInDir(path: string | string[]): Promise<void> {
+  getMockState().calls.push({ cmd: "revealItemInDir", args: path });
   return Promise.resolve();
 }
 

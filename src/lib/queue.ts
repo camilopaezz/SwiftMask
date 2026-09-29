@@ -8,14 +8,17 @@ import {
 } from "../stores/queueStore";
 import { uiStore } from "../stores/uiStore";
 import { isProcessBusy, type ProcessSettings } from "./currentImage";
+import { isImageFile } from "./imageExt";
 import {
   baseName,
   deriveFolderOutputDir,
   deriveOutputPath,
   normalizePathKey,
+  resolveOutputDir,
 } from "./path";
 import {
   cancelQueueProcess,
+  forceQueueIdle,
   isQueueRunActive,
   waitForQueueIdle,
 } from "./queueRunner";
@@ -25,18 +28,9 @@ import {
   invokePickFolder,
 } from "./tauri";
 
-const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "bmp"]);
-
 export const QUEUE_ENQUEUE_CONFIRM_THRESHOLD = 200;
 
-function getExtension(path: string): string {
-  const dot = path.lastIndexOf(".");
-  return dot >= 0 ? path.slice(dot + 1).toLowerCase() : "";
-}
-
-export function isImageFile(path: string): boolean {
-  return IMAGE_EXTENSIONS.has(getExtension(path));
-}
+export { isImageFile } from "./imageExt";
 
 function existingPathSet(): Set<string> {
   return new Set(
@@ -48,18 +42,26 @@ function existingPathSet(): Set<string> {
 function queueOutputDir(
   settings: ProcessSettings,
   source: QueueSource | null = queueStore.getState().source,
+  fallbackOutputDir: string | null = null,
 ): string | null {
-  if (source?.kind === "folder") return source.outputDir;
-  return settings.outputDir;
+  return resolveOutputDir(
+    settings.outputDir,
+    fallbackOutputDir,
+    source?.kind === "folder" ? source.outputDir : null,
+  );
 }
 
 function makeItems(
   paths: string[],
   settings: ProcessSettings,
   source: QueueSource | null,
-  opts?: { fromWatch?: boolean },
+  opts?: { fromWatch?: boolean; defaultOutputDir?: string | null },
 ): QueueItem[] {
-  const outDir = queueOutputDir(settings, source);
+  const outDir = queueOutputDir(
+    settings,
+    source,
+    opts?.defaultOutputDir ?? null,
+  );
   const fromWatch = opts?.fromWatch === true;
   return paths.map((inputPath) => ({
     id: crypto.randomUUID(),
@@ -71,7 +73,39 @@ function makeItems(
     error: null,
     jobId: null,
     ...(fromWatch ? { fromWatch: true } : {}),
+    ...(opts?.defaultOutputDir
+      ? { defaultOutputDir: opts.defaultOutputDir }
+      : {}),
   }));
+}
+
+/** Add clipboard image paths without starting processing. */
+export function enqueueClipboardImages(
+  paths: string[],
+  settings: ProcessSettings,
+  defaultOutputDir: string | null,
+): "enqueued" | "appended" | "rejected" {
+  const known = existingPathSet();
+  const images = paths.filter((path) => {
+    if (!isImageFile(path)) return false;
+    const key = normalizePathKey(path);
+    if (known.has(key)) return false;
+    known.add(key);
+    return true;
+  });
+  if (!images.length) return "rejected";
+  const wasActive = queueStore.getState().active;
+  const source = wasActive
+    ? queueStore.getState().source
+    : ({ kind: "drop" } as QueueSource);
+  const items = makeItems(images, settings, source, { defaultOutputDir });
+  if (!wasActive) imageStore.getState().clear();
+  if (wasActive) {
+    queueStore.getState().appendItems(items);
+    return "appended";
+  }
+  queueStore.getState().activateWithItems(items, { kind: "drop" });
+  return "enqueued";
 }
 
 function showInfo(title: string, body?: string): void {
@@ -101,8 +135,7 @@ async function endQueueSession(): Promise<void> {
       await waitForQueueIdle(10_000);
     } catch {
       // Timeout / orphaned running flag: force idle so leave/clear can proceed.
-      queueStore.getState().setRunning(false);
-      queueStore.getState().setCancelRequested(false);
+      forceQueueIdle();
     }
   }
   const { stopFolderWatch } = await import("./folderWatch");

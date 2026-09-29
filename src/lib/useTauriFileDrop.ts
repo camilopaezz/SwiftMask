@@ -19,24 +19,44 @@ export function useTauriFileDrop(): TauriFileDropState {
     const unsubs: (() => void)[] = [];
 
     const setup = async () => {
-      const dragOverUnsub = await listen("tauri://drag-over", () => {
-        if (!cancelled) setIsDragging(true);
-      });
-      const dragLeaveUnsub = await listen("tauri://drag-leave", () => {
-        if (!cancelled) setIsDragging(false);
-      });
-      const dragDropUnsub = await listen<DragDropPayload>(
-        "tauri://drag-drop",
-        (event) => {
-          if (cancelled) return;
-          setIsDragging(false);
-          setPaths(event.payload.paths);
-        },
-      );
-      unsubs.push(dragOverUnsub, dragLeaveUnsub, dragDropUnsub);
+      try {
+        const dragOverUnsub = await listen("tauri://drag-over", () => {
+          if (!cancelled) setIsDragging(true);
+        });
+        if (cancelled) {
+          dragOverUnsub();
+          return;
+        }
+        unsubs.push(dragOverUnsub);
+        const dragLeaveUnsub = await listen("tauri://drag-leave", () => {
+          if (!cancelled) setIsDragging(false);
+        });
+        if (cancelled) {
+          dragLeaveUnsub();
+          return;
+        }
+        unsubs.push(dragLeaveUnsub);
+        const dragDropUnsub = await listen<DragDropPayload>(
+          "tauri://drag-drop",
+          (event) => {
+            if (cancelled) return;
+            setIsDragging(false);
+            setPaths(event.payload.paths);
+          },
+        );
+        if (cancelled) {
+          dragDropUnsub();
+          return;
+        }
+        unsubs.push(dragDropUnsub);
+      } catch (err) {
+        console.error("file drop listeners failed", err);
+        for (const u of unsubs) u();
+        unsubs.length = 0;
+      }
     };
 
-    setup();
+    void setup();
 
     // DEV / e2e: allow programmatic drop injection (Playwright + computer-use).
     if (import.meta.env.DEV || import.meta.env.VITE_E2E === "1") {

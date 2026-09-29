@@ -1,9 +1,9 @@
 import { useTranslation } from "react-i18next";
-import { clearCurrent, isProcessBusy } from "../lib/currentImage";
+import { isUiLocked } from "../lib/busy";
+import { clearCurrent } from "../lib/currentImage";
 import { setFolderWatch } from "../lib/folderWatch";
 import { openImageFile } from "../lib/openImage";
 import { folderDisplayName, pickAndOpenFolder } from "../lib/queue";
-import { isQueueRunActive } from "../lib/queueRunner";
 import { useImageStore } from "../stores/imageStore";
 import { fileNameFromPath, useQueueStore } from "../stores/queueStore";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -14,14 +14,9 @@ export function FileBlock() {
   const queueActive = useQueueStore((state) => state.active);
   const queueItems = useQueueStore((state) => state.items);
   const source = useQueueStore((state) => state.source);
-  const queueRunning = useQueueStore((state) => state.running);
   const mode = useSettingsStore((state) => state.mode);
   const outputDir = useSettingsStore((state) => state.outputDir);
-  const busy =
-    current?.status === "processing" ||
-    isProcessBusy() ||
-    queueRunning ||
-    isQueueRunActive();
+  const busy = isUiLocked();
 
   const handleSelect = async () => {
     await openImageFile({ mode, outputDir });

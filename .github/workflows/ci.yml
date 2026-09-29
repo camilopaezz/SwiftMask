@@ -41,6 +41,9 @@ jobs:
       - name: lint and format check frontend
         run: bun run lint
 
+      - name: typecheck e2e and vite config
+        run: bun run typecheck:e2e && bun run typecheck:node
+
   build:
     needs: lint
     strategy:
@@ -74,6 +77,8 @@ jobs:
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: cache Rust
         uses: Swatinem/rust-cache@v2
@@ -117,7 +122,10 @@ jobs:
 
       - name: build and test Rust
         working-directory: ./src-tauri
-        run: cargo test --locked
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
 
       - name: require updater signing secrets
         shell: bash

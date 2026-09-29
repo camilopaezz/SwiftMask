@@ -26,9 +26,8 @@ static SESSION_CACHE: Mutex<Option<HashMap<(String, String), Session>>> = Mutex:
 /// Last successful use of any cached session (for idle TTL).
 static SESSION_LAST_USE: Mutex<Option<Instant>> = Mutex::new(None);
 
-static DETECTED_VRAM: LazyLock<Option<u64>> = LazyLock::new(|| {
-    crate::gpu::detect_gpu().ok().and_then(|g| g.vram_bytes)
-});
+static DETECTED_VRAM: LazyLock<Option<u64>> =
+    LazyLock::new(|| crate::gpu::detect_gpu().ok().and_then(|g| g.vram_bytes));
 
 fn optimization_level_for_vram(vram: Option<u64>) -> GraphOptimizationLevel {
     match crate::gpu::opt_level_for_vram(vram) {
@@ -91,9 +90,8 @@ pub fn load_session_from_bytes(model_bytes: &[u8], ep: &str) -> Result<Session, 
 /// DirectML/ORT keep multi-GB of committed resources on the live `OrtSession`.
 /// After OOM (or EP switch) those sessions must be destroyed; Task Manager may
 /// still show a high working set until we trim it.
-pub fn invalidate_all_sessions() -> Result<(), AppError> {
+pub fn invalidate_all_sessions() {
     release_all_sessions();
-    Ok(())
 }
 
 /// Take ownership of the cache so `Session` Drop runs outside the mutex.
@@ -174,10 +172,7 @@ where
 {
     {
         let guard = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-        if guard
-            .as_ref()
-            .is_some_and(|cache| cache.contains_key(key))
-        {
+        if guard.as_ref().is_some_and(|cache| cache.contains_key(key)) {
             return Ok(());
         }
     }
@@ -189,9 +184,7 @@ where
         Err(e) => {
             // Load OOM often means another cached session already ate the budget.
             if is_likely_oom(&e) {
-                log::warn!(
-                    "OOM while loading session {key:?}; releasing all cached sessions: {e}"
-                );
+                log::warn!("OOM while loading session {key:?}; releasing all cached sessions: {e}");
                 release_all_sessions();
             }
             return Err(e);
@@ -207,7 +200,12 @@ where
     Ok(())
 }
 
-pub fn with_session<F, R, L>(model_id: &str, ep: &str, mut load_bytes: L, f: F) -> Result<R, AppError>
+pub fn with_session<F, R, L>(
+    model_id: &str,
+    ep: &str,
+    mut load_bytes: L,
+    f: F,
+) -> Result<R, AppError>
 where
     F: FnOnce(&mut Session) -> Result<R, AppError>,
     L: FnMut() -> Result<Vec<u8>, AppError>,
@@ -222,10 +220,7 @@ where
 
     // Key may have vanished between ensure and re-lock (invalidate / OOM cleanup
     // on another path). Reload once rather than failing with a cryptic miss.
-    if !guard
-        .as_ref()
-        .is_some_and(|cache| cache.contains_key(&key))
-    {
+    if !guard.as_ref().is_some_and(|cache| cache.contains_key(&key)) {
         drop(guard);
         ensure_session_loaded(&key, &mut load_bytes)?;
         guard = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
@@ -276,9 +271,7 @@ fn take_cached_session(
     guard: &mut Option<HashMap<(String, String), Session>>,
     key: &(String, String),
 ) -> Option<Session> {
-    let Some(cache) = guard.as_mut() else {
-        return None;
-    };
+    let cache = guard.as_mut()?;
     let session = cache.remove(key);
     if cache.is_empty() {
         *guard = None;
@@ -310,9 +303,7 @@ pub fn lock_session_cache_for_test() -> std::sync::MutexGuard<'static, ()> {
 fn insert_session_for_test(model_id: &str, ep: &str, session: Session) {
     let key = (model_id.to_string(), ep.to_string());
     let mut guard = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    guard
-        .get_or_insert_with(HashMap::new)
-        .insert(key, session);
+    guard.get_or_insert_with(HashMap::new).insert(key, session);
 }
 
 pub fn run(session: &mut Session, input: &Array4<f32>) -> Result<ndarray::ArrayD<f32>, AppError> {
@@ -424,16 +415,25 @@ mod tests {
     #[test]
     fn with_session_accepts_distinct_model_keys() {
         let _lock = lock_session_cache_for_test();
-        let _ = invalidate_all_sessions();
-        let r1 = with_session("u2netp", EP_CPU, || Ok(U2NETP_MODEL_BYTES.to_vec()), |session| {
-            Ok(session.inputs().len())
-        });
-        let r2 = with_session("u2netp", EP_CPU, || Ok(U2NETP_MODEL_BYTES.to_vec()), |session| {
-            Ok(session.inputs().len())
-        });
-        let r3 = with_session("isnet-stub", EP_CPU, || Ok(U2NETP_MODEL_BYTES.to_vec()), |session| {
-            Ok(session.inputs().len())
-        });
+        invalidate_all_sessions();
+        let r1 = with_session(
+            "u2netp",
+            EP_CPU,
+            || Ok(U2NETP_MODEL_BYTES.to_vec()),
+            |session| Ok(session.inputs().len()),
+        );
+        let r2 = with_session(
+            "u2netp",
+            EP_CPU,
+            || Ok(U2NETP_MODEL_BYTES.to_vec()),
+            |session| Ok(session.inputs().len()),
+        );
+        let r3 = with_session(
+            "isnet-stub",
+            EP_CPU,
+            || Ok(U2NETP_MODEL_BYTES.to_vec()),
+            |session| Ok(session.inputs().len()),
+        );
         assert_eq!(r1.unwrap(), 1);
         assert_eq!(r2.unwrap(), 1);
         assert_eq!(r3.unwrap(), 1);
@@ -443,7 +443,7 @@ mod tests {
     fn successful_runs_keep_warm_session() {
         // Serial with_session calls reuse the loaded session.
         let _lock = lock_session_cache_for_test();
-        let _ = invalidate_all_sessions();
+        invalidate_all_sessions();
         let mut loads = 0usize;
 
         with_session(
@@ -474,7 +474,7 @@ mod tests {
     #[test]
     fn multi_run_inside_one_with_session_loads_once() {
         let _lock = lock_session_cache_for_test();
-        let _ = invalidate_all_sessions();
+        invalidate_all_sessions();
         let mut loads = 0usize;
         let runs = with_session(
             "u2netp",
@@ -504,8 +504,12 @@ mod tests {
         assert!(is_likely_oom(&crate::error::inference_error(
             "No hay suficientes recursos de memoria disponibles para completar esta operaci\u{00f3}n"
         )));
-        assert!(is_likely_oom(&crate::error::inference_error("CUDA out of memory")));
-        assert!(is_likely_oom(&crate::error::inference_error("std::bad_alloc")));
+        assert!(is_likely_oom(&crate::error::inference_error(
+            "CUDA out of memory"
+        )));
+        assert!(is_likely_oom(&crate::error::inference_error(
+            "std::bad_alloc"
+        )));
         assert!(!is_likely_oom(&crate::error::inference_error(
             "model produced no outputs"
         )));
@@ -513,13 +517,15 @@ mod tests {
         assert!(!is_likely_oom(&crate::error::inference_error(
             "failed in room setup"
         )));
-        assert!(!is_likely_oom(&crate::error::inference_error("zoom level invalid")));
+        assert!(!is_likely_oom(&crate::error::inference_error(
+            "zoom level invalid"
+        )));
     }
 
     #[test]
     fn failed_run_drops_cached_session() {
         let _lock = lock_session_cache_for_test();
-        let _ = invalidate_all_sessions();
+        invalidate_all_sessions();
         let mut load_count = 0usize;
         let load = || {
             load_count += 1;
@@ -548,7 +554,7 @@ mod tests {
     #[test]
     fn oom_run_clears_all_cached_sessions() {
         let _lock = lock_session_cache_for_test();
-        let _ = invalidate_all_sessions();
+        invalidate_all_sessions();
 
         // Success-path unload empties the map after each with_session, so seed a
         // second live key via the test inject. During the OOM with_session, both
@@ -589,7 +595,7 @@ mod tests {
     #[test]
     fn invalidate_all_sessions_forces_reload() {
         let _lock = lock_session_cache_for_test();
-        let _ = invalidate_all_sessions();
+        invalidate_all_sessions();
         let mut loads = 0usize;
         with_session(
             "u2netp",
@@ -603,7 +609,7 @@ mod tests {
         .unwrap();
         assert_eq!(loads, 1);
 
-        let _ = invalidate_all_sessions();
+        invalidate_all_sessions();
         with_session(
             "u2netp",
             EP_CPU,

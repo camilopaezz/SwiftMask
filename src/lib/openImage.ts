@@ -1,5 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { isProcessBusy, type ProcessSettings } from "./currentImage";
+import { IMAGE_PICKER_EXTENSIONS } from "./imageExt";
 import { loadSingleImage } from "./queue";
 import { showAppErrorNotice } from "./showAppErrorNotice";
 
@@ -9,7 +10,7 @@ async function pickImagePath(): Promise<string | null> {
     filters: [
       {
         name: "Images",
-        extensions: ["png", "jpg", "jpeg", "webp", "bmp"],
+        extensions: IMAGE_PICKER_EXTENSIONS,
       },
     ],
   });

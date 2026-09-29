@@ -1,3 +1,4 @@
+import i18n from "../i18n";
 import { type QueueItem, queueStore } from "../stores/queueStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
@@ -11,7 +12,7 @@ import { formatFallbackNotice } from "./errorCopy";
 import { showFinishNotice } from "./finishNotice";
 import { isProcessableMode } from "./models";
 import { ERROR_CODES, parseAppError } from "./parseAppError";
-import { deriveOutputPath } from "./path";
+import { deriveOutputPath, resolveOutputDir } from "./path";
 import {
   type BatchOverwriteChoice,
   type BatchOverwriteChooser,
@@ -21,13 +22,13 @@ import {
 import {
   invokeCancelInference,
   invokeEnsureDir,
-  invokePathExists,
-  invokeRemoveImageBackground,
+  type JobTimings,
   listenInferenceDone,
   listenInferenceError,
   listenInferenceFallback,
   listenInferenceProgress,
 } from "./tauri";
+import { armWatchAutoRun, pauseWatchAutoRun } from "./watchAutoRun";
 
 export type QueueRunnerDeps = {
   exists: (path: string) => Promise<boolean>;
@@ -62,7 +63,11 @@ export type QueueRunnerDeps = {
     handler: (payload: { id: string; stage: string; pct: number }) => void,
   ) => Promise<() => void>;
   listenDone?: (
-    handler: (payload: { id: string; output_path: string }) => void,
+    handler: (payload: {
+      id: string;
+      output_path: string;
+      timings: JobTimings;
+    }) => void,
   ) => Promise<() => void>;
   listenError?: (
     handler: (payload: { id: string; code?: string; message: string }) => void,
@@ -108,26 +113,40 @@ export async function waitForQueueIdle(timeoutMs = 60_000): Promise<void> {
   }
 }
 
-/** Test-only: clear module latch left by aborted/parallel suite runs. */
-export function resetQueueRunnerForTests(): void {
+/** Clear run latches so callers can recover after a stuck cancel. */
+export function forceQueueIdle(): void {
   runLoopActive = false;
   runGeneration += 1;
   queueStore.getState().setRunning(false);
   queueStore.getState().setCancelRequested(false);
 }
 
-function effectiveOutputDir(settings: ProcessSettings): string | null {
+/** Test-only: clear module latch left by aborted/parallel suite runs. */
+export function resetQueueRunnerForTests(): void {
+  forceQueueIdle();
+}
+
+function itemOutputDir(
+  item: QueueItem,
+  settings: ProcessSettings,
+): string | null {
   const source = queueStore.getState().source;
-  if (source?.kind === "folder") return source.outputDir;
-  return settings.outputDir;
+  return resolveOutputDir(
+    settings.outputDir,
+    item.defaultOutputDir,
+    source?.kind === "folder" ? source.outputDir : null,
+  );
 }
 
 function refreshOutputPaths(settings: ProcessSettings): void {
   const { items, patchItem } = queueStore.getState();
-  const outDir = effectiveOutputDir(settings);
   for (const item of items) {
     if (item.status !== "pending" && item.status !== "failed") continue;
-    const outputPath = deriveOutputPath(item.inputPath, outDir, settings.mode);
+    const outputPath = deriveOutputPath(
+      item.inputPath,
+      itemOutputDir(item, settings),
+      settings.mode,
+    );
     if (outputPath !== item.outputPath) {
       patchItem(item.id, { outputPath });
     }
@@ -212,9 +231,7 @@ export async function startQueueProcess(
   // Manual Process that actually starts arms watch auto-run for later arrivals.
   // Watch-only auto-runs must not arm themselves.
   if (pendingScope === "all") {
-    void import("./folderWatch").then((m) => {
-      m.armWatchAutoRun();
-    });
+    armWatchAutoRun();
   }
 
   const runOverwritePolicy: Exclude<BatchOverwriteChoice, "cancel"> = choice;
@@ -238,23 +255,32 @@ export async function startQueueProcess(
     }
   }
 
-  // Create sibling `{folder}-nobg/` only when we are about to write files.
+  // Create a folder queue's output directory before its run starts.
+  const ensuredDirs = new Set<string>();
   const workLeft = queueStore
     .getState()
     .items.some((i) => isRunnablePending(i, pendingScope));
   if (workLeft) {
     const source = queueStore.getState().source;
-    if (source?.kind === "folder") {
-      const ensureDir = deps.ensureDir ?? invokeEnsureDir;
+    const ensureDir = deps.ensureDir ?? invokeEnsureDir;
+    const needsFolderOutput = queueStore
+      .getState()
+      .items.some(
+        (item) =>
+          isRunnablePending(item, pendingScope) && !item.defaultOutputDir,
+      );
+    if (source?.kind === "folder" && needsFolderOutput) {
+      const outputDir = source.outputDir;
       try {
-        await ensureDir(source.outputDir);
+        await ensureDir(outputDir);
+        ensuredDirs.add(outputDir);
       } catch (err) {
         runGeneration += 1;
         clearRunLatch();
         uiStore.getState().showNotice({
           severity: "error",
-          title: "Could not create output folder",
-          body: source.outputDir,
+          title: i18n.t("errors.ensureDirFailed.title"),
+          body: outputDir,
           code: "ensure_dir_failed",
         });
         console.error("ensure_dir failed", err);
@@ -281,9 +307,25 @@ export async function startQueueProcess(
       if (!next) break;
 
       const liveSettings = deps.getSettings();
+      const outputDir = itemOutputDir(next, liveSettings);
+      // Pixel items may be appended after the run's initial directory check.
+      if (next.defaultOutputDir && outputDir && !ensuredDirs.has(outputDir)) {
+        try {
+          await (deps.ensureDir ?? invokeEnsureDir)(outputDir);
+          ensuredDirs.add(outputDir);
+        } catch (err) {
+          console.error("ensure clipboard output directory failed", err);
+          queueStore.getState().markFailed(next.id, {
+            code: "ensure_dir_failed",
+            message: String(err),
+          });
+          failed += 1;
+          continue;
+        }
+      }
       const outputPath = deriveOutputPath(
         next.inputPath,
-        effectiveOutputDir(liveSettings),
+        outputDir,
         liveSettings.mode,
       );
 
@@ -347,6 +389,7 @@ export async function startQueueProcess(
             if (payload.id !== jobId) return;
             terminal = "done";
             terminalOutput = payload.output_path;
+            settingsStore.getState().setLastJobTimings(payload.timings);
           }),
         );
         // Soft GPU→CPU notice mid-run (AppNotice only); finish prefers this wording.
@@ -471,9 +514,7 @@ export async function cancelQueueProcess(
   const state = queueStore.getState();
   if (!runLoopActive && !state.running) return;
   // After cancel, watch keeps enqueueing but does not auto-start until Process.
-  void import("./folderWatch").then((m) => {
-    m.pauseWatchAutoRun();
-  });
+  pauseWatchAutoRun();
   queueStore.getState().setCancelRequested(true);
   const current = state.items.find((i) => i.status === "processing");
   if (current?.jobId) {
@@ -501,8 +542,3 @@ export function prodQueueRunnerDeps(): QueueRunnerDeps {
     ensureDir: invokeEnsureDir,
   };
 }
-
-// Keep imports used when tree-shaken tests mock modules.
-void invokePathExists;
-void invokeRemoveImageBackground;
-void settingsStore;

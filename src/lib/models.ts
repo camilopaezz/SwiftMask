@@ -4,7 +4,7 @@
  * Runtime availability (`downloaded`) comes only from `list_models`.
  */
 export type { ModelMode, ModelStaticMeta } from "./models.generated";
-export { getModelById, MODEL_REGISTRY } from "./models.generated";
+export { MODEL_REGISTRY } from "./models.generated";
 
 import type { ModelMode, ModelStaticMeta } from "./models.generated";
 

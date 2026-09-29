@@ -22,6 +22,8 @@ export type ImageItem = {
   progress: number;
   stage: string | null;
   error: ImageError | null;
+  /** Native fallback output directory attached to pasted clipboard pixels. */
+  defaultOutputDir?: string | null;
 };
 
 export type ImageState = {

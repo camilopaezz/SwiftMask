@@ -22,6 +22,10 @@ How we branch, integrate, and release SwiftMask.
 2. Implement, run checks locally:
    ```bash
    bun run lint && bun run test && bun run build
+   bun run typecheck:e2e && bun run typecheck:node && bun run gen:models:check
+   cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+   cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
+   cargo test --manifest-path src-tauri/Cargo.toml --locked
    # optional: bun run test:e2e
    ```
 3. Push and open a **PR into `dev`**.

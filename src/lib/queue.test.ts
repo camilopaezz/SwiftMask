@@ -8,6 +8,7 @@ import {
   enqueueFromDrop,
   isImageFile,
   loadSingleImage,
+  openFolderAsQueue,
   QUEUE_ENQUEUE_CONFIRM_THRESHOLD,
   removeQueueItem,
 } from "./queue";
@@ -121,7 +122,6 @@ describe("queue domain", () => {
 
   describe("openFolderAsQueue", () => {
     it("enqueues listed images into sibling output dir", async () => {
-      const { openFolderAsQueue } = await import("./queue");
       const result = await openFolderAsQueue(
         "/tmp/product-shots",
         { mode: "u2netp", outputDir: null },
@@ -144,7 +144,6 @@ describe("queue domain", () => {
     });
 
     it("returns empty when folder has no images", async () => {
-      const { openFolderAsQueue } = await import("./queue");
       const result = await openFolderAsQueue(
         "/tmp/empty",
         { mode: "u2netp", outputDir: null },
@@ -263,7 +262,6 @@ describe("queue domain", () => {
     });
 
     it("openFolder replace after confirm clears prior queue", async () => {
-      const { openFolderAsQueue } = await import("./queue");
       await enqueueFromDrop(
         ["/tmp/old.jpg"],
         { mode: "u2netp", outputDir: null },

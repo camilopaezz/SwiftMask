@@ -24,11 +24,7 @@ fn is_cancelled(err: &AppError) -> bool {
 //   rmbg-2.0               : SHA-256 from rembg source (bria_rmbg.py)
 // ======================================================================
 
-pub const PLACEHOLDER_SHA256: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
-
-pub const U2NETP_SHA256: &str =
-    "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8";
+pub const U2NETP_SHA256: &str = "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8";
 
 pub const ISNET_GENERAL_USE_SHA256: &str =
     "60920e99c45464f2ba57bee2ad08c919a52bbf852739e96947fbb4358c0d964a";
@@ -46,6 +42,13 @@ pub const BIREFNET_GENERAL_LITE_SHA256: &str =
 pub const RMBG_2_0_SHA256: &str =
     "5b486f08200f513f460da46dd701db5fbb47d79b4be4b708a19444bcd4e79958";
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PostprocessKind {
+    #[default]
+    MinMax,
+    SigmoidMinMax,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelEntry {
     pub id: String,
@@ -60,6 +63,8 @@ pub struct ModelEntry {
     pub download_url: String,
     pub sha256: String,
     pub bundled: bool,
+    #[serde(skip, default)]
+    pub postprocess: PostprocessKind,
 }
 
 /// Runtime model listing for IPC. Flattens `ModelEntry` so FE JSON stays flat:
@@ -96,6 +101,7 @@ fn registry() -> &'static [ModelEntry] {
                 download_url: "".into(),
                 sha256: U2NETP_SHA256.into(),
                 bundled: true,
+                postprocess: PostprocessKind::MinMax,
             },
             ModelEntry {
                 id: "isnet-general-use".into(),
@@ -110,6 +116,7 @@ fn registry() -> &'static [ModelEntry] {
                 download_url: "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx".into(),
                 sha256: ISNET_GENERAL_USE_SHA256.into(),
                 bundled: false,
+                postprocess: PostprocessKind::MinMax,
             },
             ModelEntry {
                 id: "rmbg-1.4".into(),
@@ -124,6 +131,7 @@ fn registry() -> &'static [ModelEntry] {
                 download_url: "https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model.onnx".into(),
                 sha256: RMBG_1_4_SHA256.into(),
                 bundled: false,
+                postprocess: PostprocessKind::MinMax,
             },
             ModelEntry {
                 id: "birefnet-general-lite".into(),
@@ -142,6 +150,7 @@ fn registry() -> &'static [ModelEntry] {
                 ),
                 sha256: BIREFNET_GENERAL_LITE_SHA256.into(),
                 bundled: false,
+                postprocess: PostprocessKind::SigmoidMinMax,
             },
             ModelEntry {
                 id: "rmbg-2.0".into(),
@@ -157,6 +166,7 @@ fn registry() -> &'static [ModelEntry] {
                 download_url: "https://github.com/danielgatis/rembg/releases/download/v0.0.0/bria-rmbg-2.0.onnx".into(),
                 sha256: RMBG_2_0_SHA256.into(),
                 bundled: false,
+                postprocess: PostprocessKind::MinMax,
             },
         ]
     });
@@ -217,7 +227,10 @@ pub fn purge_legacy_orphan_model_files(cache_dir: &Path) {
         if path.is_file() {
             match std::fs::remove_file(&path) {
                 Ok(()) => log::info!("removed legacy model cache {}", path.display()),
-                Err(e) => log::warn!("could not remove legacy model cache {}: {e}", path.display()),
+                Err(e) => log::warn!(
+                    "could not remove legacy model cache {}: {e}",
+                    path.display()
+                ),
             }
         }
     }
@@ -488,18 +501,9 @@ where
         ds.check_cancel()?;
     }
 
-    if is_placeholder_checksum(&model.sha256) {
-        log::warn!(
-            "Skipping SHA-256 verification for {}: placeholder checksum",
-            model.id
-        );
-        on_progress("download", 100.0);
-        return Ok(());
-    }
-
     // Reject empty/truncated files early (common after a killed Windows download).
-    let meta = std::fs::metadata(file_path)
-        .map_err(|e| AppError::Model(format!("stat failed: {}", e)))?;
+    let meta =
+        std::fs::metadata(file_path).map_err(|e| AppError::Model(format!("stat failed: {}", e)))?;
     if meta.len() == 0 {
         return Err(AppError::Model(format!(
             "downloaded file is empty for {}",
@@ -600,10 +604,6 @@ where
 
     on_progress("download", 100.0);
     Ok(())
-}
-
-fn is_placeholder_checksum(sha256: &str) -> bool {
-    sha256.eq_ignore_ascii_case(PLACEHOLDER_SHA256)
 }
 
 pub fn sha256_file(path: &PathBuf) -> Result<String, AppError> {
@@ -723,7 +723,10 @@ mod tests {
         assert_eq!(obj.get("name").and_then(|v| v.as_str()), Some("Turbo"));
         assert_eq!(obj.get("downloaded").and_then(|v| v.as_bool()), Some(true));
         assert_eq!(obj.get("bundled").and_then(|v| v.as_bool()), Some(true));
-        assert_eq!(obj.get("file").and_then(|v| v.as_str()), Some("u2netp.onnx"));
+        assert_eq!(
+            obj.get("file").and_then(|v| v.as_str()),
+            Some("u2netp.onnx")
+        );
     }
 
     #[test]
@@ -733,7 +736,7 @@ mod tests {
         assert_eq!(m.mean, vec![0.485, 0.456, 0.406]);
         assert_eq!(m.std, vec![0.229, 0.224, 0.225]);
         assert!(m.bundled);
-        assert!(!is_placeholder_checksum(&m.sha256));
+        assert_eq!(m.sha256.len(), 64);
     }
 
     #[test]
@@ -742,7 +745,7 @@ mod tests {
         assert_eq!(m.input_size, 1024);
         assert_eq!(m.mean, vec![0.5, 0.5, 0.5]);
         assert_eq!(m.std, vec![1.0, 1.0, 1.0]);
-        assert!(!is_placeholder_checksum(&m.sha256));
+        assert_eq!(m.sha256.len(), 64);
         assert!(!m.bundled);
     }
 
@@ -752,7 +755,7 @@ mod tests {
         assert_eq!(m.input_size, 1024);
         assert_eq!(m.mean, vec![0.5, 0.5, 0.5]);
         assert_eq!(m.std, vec![1.0, 1.0, 1.0]);
-        assert!(!is_placeholder_checksum(&m.sha256));
+        assert_eq!(m.sha256.len(), 64);
     }
 
     #[test]
@@ -766,7 +769,7 @@ mod tests {
         assert_eq!(m.license, "MIT");
         assert_eq!(m.size_bytes, 191_877_254);
         assert!(!m.bundled);
-        assert!(!is_placeholder_checksum(&m.sha256));
+        assert_eq!(m.sha256.len(), 64);
         assert_eq!(m.sha256, BIREFNET_GENERAL_LITE_SHA256);
         assert!(
             m.download_url.contains(BIREFNET_LITE_512_HF_COMMIT),
@@ -801,7 +804,7 @@ mod tests {
         let m = find_model("rmbg-2.0").unwrap();
         assert_eq!(m.input_size, 1024);
         assert_eq!(m.mean, vec![0.485, 0.456, 0.406]);
-        assert!(!is_placeholder_checksum(&m.sha256));
+        assert_eq!(m.sha256.len(), 64);
     }
 
     #[test]
@@ -866,15 +869,21 @@ mod tests {
             download_url: format!("http://127.0.0.1:{}/test.bin", port),
             sha256: expected_hash.clone(),
             bundled: false,
+            postprocess: PostprocessKind::MinMax,
         };
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("test.bin");
         let mut progress_values = vec![];
         let mut stages = vec![];
-        download_to_file(&model, &path, |stage, pct| {
-            stages.push(stage.to_string());
-            progress_values.push(pct);
-        }, None)
+        download_to_file(
+            &model,
+            &path,
+            |stage, pct| {
+                stages.push(stage.to_string());
+                progress_values.push(pct);
+            },
+            None,
+        )
         .await
         .unwrap();
         assert!(path.exists());
@@ -904,9 +913,9 @@ mod tests {
                 if read_http_headers(&mut stream).await.is_err() {
                     continue;
                 }
-                let response = format!(
+                let response =
                     "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n"
-                );
+                        .to_string();
                 if stream.write_all(response.as_bytes()).await.is_err() {
                     continue;
                 }
@@ -930,15 +939,21 @@ mod tests {
             download_url: format!("http://127.0.0.1:{}/test.bin", port),
             sha256: expected_hash.clone(),
             bundled: false,
+            postprocess: PostprocessKind::MinMax,
         };
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("test.bin");
         let mut progress_values = vec![];
         let mut stages = vec![];
-        download_to_file(&model, &path, |stage, pct| {
-            stages.push(stage.to_string());
-            progress_values.push(pct);
-        }, None)
+        download_to_file(
+            &model,
+            &path,
+            |stage, pct| {
+                stages.push(stage.to_string());
+                progress_values.push(pct);
+            },
+            None,
+        )
         .await
         .unwrap();
         assert!(path.exists());
@@ -948,33 +963,6 @@ mod tests {
             "expected mid-download progress using size_bytes fallback, got {progress_values:?}"
         );
         assert!(stages.iter().any(|s| s == "verify"));
-        handle.abort();
-    }
-
-    #[tokio::test]
-    async fn download_to_file_skips_verification_for_placeholder() {
-        let data = b"tiny";
-        let (handle, port) = spawn_local_server(data.to_vec()).await;
-        let model = ModelEntry {
-            id: "test".into(),
-            name: "Test".into(),
-            file: "test.bin".into(),
-            size_bytes: data.len() as u64,
-            input_size: 0,
-            mean: vec![],
-            std: vec![],
-            license: "".into(),
-            source: "".into(),
-            download_url: format!("http://127.0.0.1:{}/test.bin", port),
-            sha256: PLACEHOLDER_SHA256.into(),
-            bundled: false,
-        };
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("test.bin");
-        download_to_file(&model, &path, |_, _| {}, None)
-            .await
-            .unwrap();
-        assert!(path.exists());
         handle.abort();
     }
 
@@ -995,6 +983,7 @@ mod tests {
             download_url: format!("http://127.0.0.1:{}/test.bin", port),
             sha256: "0000000000000000000000000000000000000000000000000000000000000001".into(),
             bundled: false,
+            postprocess: PostprocessKind::MinMax,
         };
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("test.bin");
@@ -1056,6 +1045,7 @@ mod tests {
             download_url: format!("http://127.0.0.1:{}/test.bin", port),
             sha256,
             bundled: false,
+            postprocess: PostprocessKind::MinMax,
         }
     }
 
@@ -1083,7 +1073,10 @@ mod tests {
         let err = dl.await.unwrap().expect_err("expected cancelled");
         assert!(is_cancelled(&err), "got {err}");
         assert!(!path.exists());
-        assert!(is_nonempty_file(&partial), "partial should be kept on cancel");
+        assert!(
+            is_nonempty_file(&partial),
+            "partial should be kept on cancel"
+        );
         state.release();
         handle.abort();
     }
@@ -1110,6 +1103,7 @@ mod tests {
             download_url: "http://127.0.0.1:9/nope".into(),
             sha256: expected_hash.clone(),
             bundled: false,
+            postprocess: PostprocessKind::MinMax,
         };
 
         let state = DownloadState::new();

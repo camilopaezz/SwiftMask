@@ -92,10 +92,3 @@ export const MODEL_REGISTRY: readonly ModelStaticMeta[] = [
     bundled: false,
   },
 ];
-
-export function getModelById(
-  id: ModelMode,
-  models: readonly ModelStaticMeta[] = MODEL_REGISTRY,
-): ModelStaticMeta | undefined {
-  return models.find((m) => m.id === id);
-}

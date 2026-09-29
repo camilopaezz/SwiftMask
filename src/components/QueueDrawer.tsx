@@ -13,6 +13,7 @@ import {
   fileNameFromPath,
   type QueueItem,
   queueStore,
+  resolveQueuePreviewId,
   useQueueStore,
 } from "../stores/queueStore";
 import { InlineSvg } from "./InlineSvg";
@@ -89,7 +90,7 @@ export function QueueDrawer() {
   const done = items.filter((i) => i.status === "done").length;
   const failed = items.filter((i) => i.status === "failed").length;
   const processing = items.find((i) => i.status === "processing");
-  const previewId = pinnedId ?? selectedId ?? processing?.id ?? items[0]?.id;
+  const previewId = resolveQueuePreviewId({ items, pinnedId, selectedId });
   const preview = items.find((i) => i.id === previewId);
   const summaryName = preview
     ? fileNameFromPath(preview.inputPath)

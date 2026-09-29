@@ -195,7 +195,7 @@ fn ep_directml() -> String {
 const DXCORE_ADAPTER_ATTRIBUTE_D3D12_GENERIC_ML: windows::core::GUID =
     windows::core::GUID::from_u128(0xb71b0d41_1088_422f_a27c_0250b7d3a988);
 
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[cfg(any(test, target_os = "windows"))]
 #[derive(Debug, Clone, Copy)]
 struct DxCoreAdapterCandidate {
     is_hardware: bool,
@@ -205,21 +205,20 @@ struct DxCoreAdapterCandidate {
 }
 
 /// Mirrors ORT DirectML default path: hardware GPU with D3D12 graphics support.
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[cfg(any(test, target_os = "windows"))]
 fn is_directml_gpu_adapter(candidate: &DxCoreAdapterCandidate) -> bool {
     candidate.is_hardware && candidate.supports_d3d12_graphics
 }
 
 /// First adapter after DXCore HighPerformance sort that passes the DirectML GPU filter.
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn select_directml_adapter(candidates: &[DxCoreAdapterCandidate]) -> Option<DxCoreAdapterCandidate> {
-    candidates
-        .iter()
-        .copied()
-        .find(is_directml_gpu_adapter)
+#[cfg(any(test, target_os = "windows"))]
+fn select_directml_adapter(
+    candidates: &[DxCoreAdapterCandidate],
+) -> Option<DxCoreAdapterCandidate> {
+    candidates.iter().copied().find(is_directml_gpu_adapter)
 }
 
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[cfg(any(test, target_os = "windows"))]
 fn vram_bytes_from_dedicated(dedicated: u64) -> Option<u64> {
     if dedicated > 0 {
         Some(dedicated)
@@ -235,8 +234,8 @@ fn read_dxcore_adapter_candidate(
     use std::mem::size_of;
 
     use windows::Win32::Graphics::DXCore::{
-        DedicatedAdapterMemory, DXCORE_ADAPTER_ATTRIBUTE_D3D12_GRAPHICS, DXCoreHardwareID,
-        HardwareID, IsHardware,
+        DXCoreHardwareID, DedicatedAdapterMemory, HardwareID, IsHardware,
+        DXCORE_ADAPTER_ATTRIBUTE_D3D12_GRAPHICS,
     };
 
     unsafe {
@@ -276,8 +275,8 @@ fn read_dxcore_adapter_candidate(
 #[cfg(target_os = "windows")]
 fn query_dxcore_directml_adapter() -> Option<DxCoreAdapterCandidate> {
     use windows::Win32::Graphics::DXCore::{
-        DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE, DXCoreCreateAdapterFactory, HighPerformance,
-        IDXCoreAdapter, IDXCoreAdapterFactory, IDXCoreAdapterList,
+        DXCoreCreateAdapterFactory, HighPerformance, IDXCoreAdapter, IDXCoreAdapterFactory,
+        IDXCoreAdapterList, DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE,
     };
 
     unsafe {
@@ -300,10 +299,9 @@ fn query_dxcore_directml_adapter() -> Option<DxCoreAdapterCandidate> {
                         "DXCore CreateAdapterList (GENERIC_ML) failed: {e}; trying CORE_COMPUTE"
                     );
                 }
-                match factory
-                    .CreateAdapterList::<IDXCoreAdapterList>(&[
-                        DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE,
-                    ]) {
+                match factory.CreateAdapterList::<IDXCoreAdapterList>(&[
+                    DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE,
+                ]) {
                     Ok(list) => list,
                     Err(e) => {
                         log::warn!("DXCore CreateAdapterList (CORE_COMPUTE) failed: {e}");
@@ -322,9 +320,7 @@ fn query_dxcore_directml_adapter() -> Option<DxCoreAdapterCandidate> {
         // Match ORT: skip sort for a single adapter; on failure keep factory order.
         if count > 1 {
             if let Err(e) = adapter_list.Sort(&[HighPerformance]) {
-                log::warn!(
-                    "DXCore adapter list Sort failed: {e}; continuing with unsorted list"
-                );
+                log::warn!("DXCore adapter list Sort failed: {e}; continuing with unsorted list");
             }
         }
 
@@ -390,10 +386,10 @@ pub fn run_benchmark(app: &AppHandle) -> Result<BenchmarkResult, AppError> {
             || Ok(crate::inference::U2NETP_MODEL_BYTES.to_vec()),
             |session| {
                 let _warmup = crate::inference::run(session, &tensor)?;
-                let _warmup_alpha = crate::pipeline::postprocess("u2netp", original_size, &_warmup)?;
+                let _warmup_alpha = crate::pipeline::postprocess(u2netp, original_size, &_warmup)?;
                 let start = Instant::now();
                 let output = crate::inference::run(session, &tensor)?;
-                let _alpha = crate::pipeline::postprocess("u2netp", original_size, &output)?;
+                let _alpha = crate::pipeline::postprocess(u2netp, original_size, &output)?;
                 Ok(start.elapsed().as_secs_f64())
             },
         )?;
@@ -405,7 +401,11 @@ pub fn run_benchmark(app: &AppHandle) -> Result<BenchmarkResult, AppError> {
 
     let winner = ep_latencies
         .iter()
-        .min_by(|a, b| a.seconds.partial_cmp(&b.seconds).unwrap_or(std::cmp::Ordering::Equal))
+        .min_by(|a, b| {
+            a.seconds
+                .partial_cmp(&b.seconds)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
         .map(|l| l.ep.clone())
         .unwrap_or_else(ep_cpu);
 
@@ -422,7 +422,7 @@ fn persist_ep(app: &AppHandle, ep: &str) -> Result<(), AppError> {
     let mut config = crate::config::load_config(app)?;
     config.execution_provider = Some(normalized);
     crate::config::save_config(app, &config)?;
-    crate::inference::invalidate_all_sessions()?;
+    crate::inference::invalidate_all_sessions();
     Ok(())
 }
 
@@ -556,10 +556,10 @@ mod tests {
                 crate::inference::load_session_from_bytes(crate::inference::U2NETP_MODEL_BYTES, ep)
                     .unwrap();
             let _warmup = crate::inference::run(&mut session, &tensor).unwrap();
-            let _warmup_alpha = crate::pipeline::postprocess("u2netp", (64, 64), &_warmup).unwrap();
+            let _warmup_alpha = crate::pipeline::postprocess(u2netp, (64, 64), &_warmup).unwrap();
             let start = Instant::now();
             let output = crate::inference::run(&mut session, &tensor).unwrap();
-            let _alpha = crate::pipeline::postprocess("u2netp", (64, 64), &output).unwrap();
+            let _alpha = crate::pipeline::postprocess(u2netp, (64, 64), &output).unwrap();
             println!("benchmark {}: {}s", ep, start.elapsed().as_secs_f64());
         }
     }

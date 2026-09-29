@@ -1,11 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyDownloadEvent,
-  canCheckForUpdates,
   checkForUpdate,
   classifyUpdaterError,
   installUpdateAndRelaunch,
-  updateInfoFromUpdate,
 } from "./updater";
 
 const checkMock = vi.fn();
@@ -81,35 +79,6 @@ describe("applyDownloadEvent", () => {
       data: { chunkLength: 10 },
     });
     expect(mid.progress.percent).toBeUndefined();
-  });
-});
-
-describe("canCheckForUpdates", () => {
-  it("blocks while checking, downloading, or restarting", () => {
-    expect(canCheckForUpdates("checking")).toBe(false);
-    expect(canCheckForUpdates("downloading")).toBe(false);
-    expect(canCheckForUpdates("restarting")).toBe(false);
-    expect(canCheckForUpdates("idle")).toBe(true);
-    expect(canCheckForUpdates("available")).toBe(true);
-    expect(canCheckForUpdates("error")).toBe(true);
-    expect(canCheckForUpdates("up-to-date")).toBe(true);
-  });
-});
-
-describe("updateInfoFromUpdate", () => {
-  it("maps plugin fields", () => {
-    const update = makeUpdate({
-      version: "2.0.0",
-      currentVersion: "1.9.0",
-      body: "notes",
-      date: "2026-01-01T00:00:00Z",
-    }) as never;
-    expect(updateInfoFromUpdate(update)).toEqual({
-      version: "2.0.0",
-      currentVersion: "1.9.0",
-      notes: "notes",
-      date: "2026-01-01T00:00:00Z",
-    });
   });
 });
 

@@ -21,8 +21,7 @@ pub fn encode_png_rgba(rgb: &RgbImage, alpha: &GrayImage) -> Result<Vec<u8>, App
         rgba.put_pixel(x, y, image::Rgba([pix[0], pix[1], pix[2], a]));
     }
     let mut buf = Vec::new();
-    rgba
-        .write_to(&mut std::io::Cursor::new(&mut buf), ImageFormat::Png)
+    rgba.write_to(&mut std::io::Cursor::new(&mut buf), ImageFormat::Png)
         .map_err(|e| crate::error::image_encode_error(e.to_string()))?;
     Ok(buf)
 }
@@ -32,9 +31,7 @@ mod tests {
     use super::*;
 
     fn make_rgb() -> RgbImage {
-        RgbImage::from_fn(32, 24, |x, y| {
-            image::Rgb([x as u8, y as u8, (x + y) as u8])
-        })
+        RgbImage::from_fn(32, 24, |x, y| image::Rgb([x as u8, y as u8, (x + y) as u8]))
     }
 
     #[test]
@@ -53,8 +50,7 @@ mod tests {
     fn jpeg_decode_and_reencode_png() {
         let rgb = make_rgb();
         let mut jpeg = Vec::new();
-        rgb
-            .write_to(&mut std::io::Cursor::new(&mut jpeg), ImageFormat::Jpeg)
+        rgb.write_to(&mut std::io::Cursor::new(&mut jpeg), ImageFormat::Jpeg)
             .unwrap();
         let decoded = decode(&jpeg).unwrap();
         assert_eq!(decoded.width(), 32);
@@ -84,8 +80,7 @@ mod tests {
     fn bmp_round_trip() {
         let rgb = make_rgb();
         let mut bmp = Vec::new();
-        rgb
-            .write_to(&mut std::io::Cursor::new(&mut bmp), ImageFormat::Bmp)
+        rgb.write_to(&mut std::io::Cursor::new(&mut bmp), ImageFormat::Bmp)
             .unwrap();
         let decoded = decode(&bmp).unwrap();
         assert_eq!(decoded.width(), 32);

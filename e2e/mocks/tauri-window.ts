@@ -7,8 +7,6 @@ export function getCurrentWindow() {
     startDragging: async () => {},
     minimize: async () => {},
     toggleMaximize: async () => {},
-    maximize: async () => {},
-    unmaximize: async () => {},
     unminimize: async () => {},
     close: async () => {},
     isMaximized: async () => false,

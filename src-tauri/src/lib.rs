@@ -1,20 +1,26 @@
+pub mod clipboard_import;
 pub mod commands;
 mod config;
+pub mod download;
 pub mod error;
 mod events;
 mod folder_watch;
+mod fs_util;
 mod gpu;
+mod image_ext;
 pub mod image_io;
 pub mod inference;
 pub mod job;
-pub mod download;
 pub mod models;
 pub mod pipeline;
 pub mod processing;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            crate::clipboard_import::cleanup_session(app.handle());
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -22,7 +28,9 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(crate::processing::ProcessingState::new())
         .manage(crate::download::DownloadState::new())
-        .manage(std::sync::Arc::new(crate::folder_watch::FolderWatchState::new()))
+        .manage(std::sync::Arc::new(
+            crate::folder_watch::FolderWatchState::new(),
+        ))
         .invoke_handler(tauri::generate_handler![
             commands::detect_gpu,
             commands::run_benchmark,
@@ -43,7 +51,13 @@ pub fn run() {
             commands::watch_folder_stop,
             commands::get_runtime_info,
             commands::get_config,
+            commands::import_clipboard_images,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                crate::clipboard_import::cleanup_session(app);
+            }
+        });
 }

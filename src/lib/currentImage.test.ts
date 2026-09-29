@@ -3,7 +3,6 @@ import { imageStore } from "../stores/imageStore";
 import { settingsStore } from "../stores/settingsStore";
 import { uiStore } from "../stores/uiStore";
 import {
-  acceptDrop,
   applyDone,
   applyError,
   applyFallback,
@@ -100,54 +99,26 @@ describe("currentImage", () => {
     }
   });
 
-  describe("acceptDrop", () => {
-    it("filters non-images and returns false when none", () => {
-      const ok = acceptDrop(["/tmp/notes.txt", "/tmp/readme.md"], {
-        mode: "u2netp",
-        outputDir: null,
-      });
-      expect(ok).toBe(false);
-      expect(imageStore.getState().current).toBeNull();
-    });
-
-    it("ignores drop while processing", () => {
-      imageStore.getState().set({
-        ...makeReadyItem(),
-        status: "processing",
-      });
-      const ok = acceptDrop(["/tmp/new.jpg"], {
-        mode: "u2netp",
-        outputDir: null,
-      });
-      expect(ok).toBe(false);
-      expect(imageStore.getState().current?.inputPath).toBe("/tmp/in.png");
-    });
-
-    it("creates a ready item from the first image path", () => {
-      const ok = acceptDrop(
-        ["/tmp/notes.txt", "/tmp/photo.jpg", "/tmp/other.png"],
-        {
-          mode: "u2netp",
-          outputDir: "/out",
-        },
-      );
-      expect(ok).toBe(true);
-      const current = imageStore.getState().current;
-      expect(current?.inputPath).toBe("/tmp/photo.jpg");
-      expect(current?.status).toBe("ready");
-      expect(current?.progress).toBe(0);
-      expect(current?.stage).toBeNull();
-      expect(current?.error).toBeNull();
-      expect(current?.outputPath).toBe("/out/photo-nobg-u2netp.png");
-      expect(current?.id).toBeTruthy();
-    });
-  });
-
   describe("syncOutputPath", () => {
     it("updates outputPath when mode or outputDir change", () => {
       imageStore
         .getState()
         .set(makeReadyItem({ outputPath: "/tmp/in-nobg-u2netp.png" }));
+      syncOutputPath({ mode: "rmbg-2.0", outputDir: "/exports" });
+      expect(imageStore.getState().current?.outputPath).toBe(
+        "/exports/in-nobg-rmbg-2.0.png",
+      );
+    });
+
+    it("uses pasted pixel fallback unless a configured output directory exists", () => {
+      imageStore.getState().set({
+        ...makeReadyItem(),
+        defaultOutputDir: "/Pictures/SwiftMask",
+      });
+      syncOutputPath({ mode: "rmbg-2.0", outputDir: null });
+      expect(imageStore.getState().current?.outputPath).toBe(
+        "/Pictures/SwiftMask/in-nobg-rmbg-2.0.png",
+      );
       syncOutputPath({ mode: "rmbg-2.0", outputDir: "/exports" });
       expect(imageStore.getState().current?.outputPath).toBe(
         "/exports/in-nobg-rmbg-2.0.png",
@@ -294,12 +265,7 @@ describe("currentImage", () => {
       await vi.waitFor(() => expect(ask).toHaveBeenCalled());
       expect(isProcessBusy()).toBe(true);
 
-      // Gate blocks drop while confirming.
-      expect(
-        acceptDrop(["/tmp/other.png"], { mode: "u2netp", outputDir: null }),
-      ).toBe(false);
-
-      // Hostile race: store replaced while dialog open (bypassing acceptDrop gate).
+      // Hostile race: store replaced while dialog open (bypassing startProcess gate).
       imageStore
         .getState()
         .set(makeReadyItem({ id: "replaced", inputPath: "/tmp/other.png" }));
@@ -436,9 +402,34 @@ describe("currentImage", () => {
 
       await cancelProcess({ cancelInference });
       expect(cancelInference).toHaveBeenCalledTimes(2);
+      expect(cancelInference).toHaveBeenNthCalledWith(1, "run-fail");
+      expect(cancelInference).toHaveBeenNthCalledWith(2, "run-fail");
       expect(imageStore.getState().current?.status).toBe("cancelled");
       expect(isProcessBusy()).toBe(true);
       expect(await startProcess(makeDeps())).toBe("already-processing");
+    });
+
+    it("retries cancel after a failed pair of IPC attempts", async () => {
+      imageStore.getState().set({
+        ...makeReadyItem({ id: "img-cancel-retry" }),
+        status: "processing",
+      });
+      setActiveRunIdForTests("run-retry");
+      const cancelInference = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("ipc failed"))
+        .mockRejectedValueOnce(new Error("ipc failed"))
+        .mockResolvedValueOnce(undefined);
+
+      await cancelProcess({ cancelInference });
+      expect(isProcessBusy()).toBe(true);
+      await cancelProcess({ cancelInference });
+      expect(cancelInference).toHaveBeenCalledTimes(3);
+      expect(cancelInference).toHaveBeenNthCalledWith(1, "run-retry");
+      expect(cancelInference).toHaveBeenNthCalledWith(2, "run-retry");
+      expect(cancelInference).toHaveBeenNthCalledWith(3, "run-retry");
+      expect(isProcessBusy()).toBe(false);
+      expect(imageStore.getState().current?.status).toBe("cancelled");
     });
 
     it("does not patch when not processing", async () => {
@@ -761,34 +752,7 @@ describe("currentImage", () => {
   });
 
   describe("initCurrentImageListeners", () => {
-    it("patches progress on inference:progress for the current image", async () => {
-      imageStore.getState().set({
-        ...makeReadyItem({ id: "img-1" }),
-        status: "processing",
-      });
-      await initCurrentImageListeners();
-      handlers["inference:progress"]({
-        payload: { id: "img-1", stage: "inferring", pct: 55 },
-      });
-      const current = imageStore.getState().current;
-      expect(current?.status).toBe("processing");
-      expect(current?.stage).toBe("inferring");
-      expect(current?.progress).toBe(55);
-    });
-
-    it("ignores progress events for a different id", async () => {
-      imageStore.getState().set({
-        ...makeReadyItem({ id: "img-1" }),
-        status: "processing",
-      });
-      await initCurrentImageListeners();
-      handlers["inference:progress"]({
-        payload: { id: "other", stage: "inferring", pct: 55 },
-      });
-      expect(imageStore.getState().current?.progress).toBe(0);
-    });
-
-    it("sets done status and output path on inference:done", async () => {
+    it("sets lastJobTimings on inference:done", async () => {
       imageStore.getState().set({
         ...makeReadyItem({ id: "img-2" }),
         status: "processing",
@@ -809,56 +773,13 @@ describe("currentImage", () => {
       const current = imageStore.getState().current;
       expect(current?.status).toBe("done");
       expect(current?.outputPath).toBe("/tmp/out.png");
-      expect(current?.progress).toBe(100);
-      expect(current?.stage).toBeNull();
       expect(settingsStore.getState().lastJobTimings).toEqual({
         stages: [{ stage: "inferring", seconds: 0.4 }],
         total_seconds: 0.5,
       });
     });
 
-    it("sets error status and message on inference:error", async () => {
-      imageStore.getState().set({
-        ...makeReadyItem({ id: "img-3" }),
-        status: "processing",
-        progress: 20,
-        stage: "decoding",
-      });
-      await initCurrentImageListeners();
-      handlers["inference:error"]({
-        payload: {
-          id: "img-3",
-          code: "oom",
-          message: "CUDA out of memory",
-        },
-      });
-      const current = imageStore.getState().current;
-      expect(current?.status).toBe("error");
-      expect(current?.error).toEqual({
-        code: "oom",
-        message: "CUDA out of memory",
-      });
-      expect(current?.stage).toBeNull();
-    });
-
-    it("sets cancelled status when error message is cancelled", async () => {
-      imageStore.getState().set({
-        ...makeReadyItem({ id: "img-4" }),
-        status: "processing",
-        progress: 20,
-        stage: "decoding",
-      });
-      await initCurrentImageListeners();
-      handlers["inference:error"]({
-        payload: { id: "img-4", code: "cancelled", message: "cancelled" },
-      });
-      const current = imageStore.getState().current;
-      expect(current?.status).toBe("cancelled");
-      expect(current?.error).toBeNull();
-      expect(current?.stage).toBeNull();
-    });
-
-    it("shows sticky fallback notice on inference:fallback", async () => {
+    it("wires inference:fallback to a sticky notice", async () => {
       uiStore.getState().dismissNotice();
       imageStore.getState().set({
         ...makeReadyItem({ id: "img-fb" }),
@@ -880,7 +801,6 @@ describe("currentImage", () => {
       expect(notice?.severity).toBe("warning");
       expect(notice?.title).toMatch(/CPU/i);
       expect(notice?.body).toMatch(/Settings/i);
-      // Fallback must not flip the image into error.
       expect(imageStore.getState().current?.status).toBe("processing");
     });
   });

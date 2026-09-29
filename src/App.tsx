@@ -75,7 +75,6 @@ function App() {
   const queueItems = useQueueStore((state) => state.items);
   const queueSelectedId = useQueueStore((state) => state.selectedId);
   const queuePinnedId = useQueueStore((state) => state.pinnedId);
-  const queueRunning = useQueueStore((state) => state.running);
   const ep = useSettingsStore((state) => state.ep);
   const mode = useSettingsStore((state) => state.mode);
   const outputDir = useSettingsStore((state) => state.outputDir);
@@ -91,15 +90,9 @@ function App() {
   const selectedQueueItem = queueActive
     ? (() => {
         const id = resolveQueuePreviewId({
-          active: queueActive,
           items: queueItems,
           selectedId: queueSelectedId,
           pinnedId: queuePinnedId,
-          source: null,
-          drawerOpen: true,
-          drawerTouched: false,
-          running: queueRunning,
-          cancelRequested: false,
         });
         return queueItems.find((i) => i.id === id) ?? queueItems[0] ?? null;
       })()
@@ -109,13 +102,18 @@ function App() {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
-    initCurrentImageListeners().then((unsub) => {
-      if (cancelled) {
-        unsub();
-      } else {
-        unsubscribe = unsub;
-      }
-    });
+    initCurrentImageListeners()
+      .then((unsub) => {
+        if (cancelled) {
+          unsub();
+        } else {
+          unsubscribe = unsub;
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("inference listeners failed", err);
+        showAppErrorNotice(err, { code: "listeners_failed" });
+      });
 
     const initialize = async () => {
       try {
@@ -400,7 +398,7 @@ function App() {
     const setup = async () => {
       try {
         const win = getCurrentWindow();
-        unlisten = await win.onCloseRequested(async (event) => {
+        const fn = await win.onCloseRequested(async (event) => {
           if (!queueHasLiveWork()) {
             // Idle: allow the default close path (win.close / titlebar ×).
             return;
@@ -424,6 +422,11 @@ function App() {
           // destroy (not close) so we don't re-enter this handler.
           await forceQuit();
         });
+        if (cancelled) {
+          fn();
+          return;
+        }
+        unlisten = fn;
       } catch (err) {
         // Web / non-Tauri: weak beforeunload fallback only.
         if (cancelled) return;
