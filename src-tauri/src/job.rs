@@ -99,9 +99,11 @@ fn run_inner(
     deps.sink.on_progress("preprocessing", 20.0)?;
     state.check_cancel()?;
     let timer = StageTimer::start("preprocessing");
-    let tensor = crate::pipeline::preprocess(model, &img)?;
-    // Consume img into rgb so we never hold DynamicImage + RgbImage together.
+    // Convert once up front: the encoder needs RGB8 anyway, and resizing RGB8
+    // avoids a second full-resolution conversion inside preprocess. For RGB8
+    // sources (most JPEGs) into_rgb8 is a move, not a copy.
     let rgb = img.into_rgb8();
+    let tensor = crate::pipeline::preprocess_rgb(model, &rgb)?;
     stages.push(timer.finish());
 
     deps.sink.on_progress("inferring", 50.0)?;

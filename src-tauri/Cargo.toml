@@ -41,6 +41,7 @@ notify = "9"
 tauri-plugin-notification = "2.8.1"
 clipboard-rs = { version = "0.3.5", features = ["image", "wayland"] }
 url = "2"
+fast_image_resize = "6"
 
 [dev-dependencies]
 tempfile = "3"
@@ -56,3 +57,13 @@ windows = { version = "0.62", features = [
 
 [target.'cfg(not(windows))'.dependencies]
 ort = { version = "2.0.0-rc.15", features = ["cuda", "download-binaries"] }
+
+# `tauri dev` uses the dev profile, where a 12 MP job took ~20 s unoptimized.
+# Dependencies get full optimization (built once, cached). The app crate gets
+# opt-level 1 because generic image code (blur, PNG encode, pixel loops) is
+# instantiated here, not in the dependency; level 1 keeps rebuilds quick.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

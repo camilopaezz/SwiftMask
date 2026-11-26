@@ -15,11 +15,14 @@ pub fn encode_png_rgba(rgb: &RgbImage, alpha: &GrayImage) -> Result<Vec<u8>, App
         )));
     }
     let (w, h) = rgb.dimensions();
-    let mut rgba = RgbaImage::new(w, h);
-    for (x, y, pix) in rgb.enumerate_pixels() {
-        let a = alpha.get_pixel(x, y)[0];
-        rgba.put_pixel(x, y, image::Rgba([pix[0], pix[1], pix[2], a]));
+    // Interleave on raw buffers: per-pixel put_pixel/get_pixel bounds-checks
+    // twice per pixel and was ~40 ms on a 12 MP image.
+    let mut buf = Vec::with_capacity(w as usize * h as usize * 4);
+    for (px, &a) in rgb.as_raw().as_chunks::<3>().0.iter().zip(alpha.as_raw()) {
+        buf.extend_from_slice(&[px[0], px[1], px[2], a]);
     }
+    let rgba = RgbaImage::from_raw(w, h, buf)
+        .ok_or_else(|| crate::error::image_encode_error("rgba buffer size mismatch"))?;
     let mut buf = Vec::new();
     rgba.write_to(&mut std::io::Cursor::new(&mut buf), ImageFormat::Png)
         .map_err(|e| crate::error::image_encode_error(e.to_string()))?;

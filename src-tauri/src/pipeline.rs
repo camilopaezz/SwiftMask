@@ -1,23 +1,74 @@
-use image::{imageops::FilterType, DynamicImage, GrayImage};
-use ndarray::{Array4, Axis};
+use fast_image_resize::images::{Image, ImageRef};
+use fast_image_resize::{PixelType, Resizer};
+use image::{DynamicImage, GrayImage, RgbImage};
+use ndarray::Array4;
 
 use crate::error::AppError;
 use crate::models::ModelEntry;
 
-pub fn preprocess(model: &ModelEntry, image: &DynamicImage) -> Result<Array4<f32>, AppError> {
-    let size = model.input_size;
-    let resized = image.resize_exact(size, size, FilterType::Lanczos3);
-    let rgb = resized.to_rgb8();
-    let mut tensor = Array4::<f32>::zeros([1, 3, size as usize, size as usize]);
-    for (x, y, pix) in rgb.enumerate_pixels() {
-        for c in 0..3 {
-            let v = pix[c] as f32 / 255.0;
-            let mean = model.mean.get(c).copied().unwrap_or(0.0);
-            let std = model.std.get(c).copied().unwrap_or(1.0);
-            tensor[[0, c, y as usize, x as usize]] = (v - mean) / std;
-        }
+fn resize_error(e: impl std::fmt::Display) -> AppError {
+    AppError::Pipeline(format!("resize failed: {e}"))
+}
+
+/// Lanczos3 resize of a packed u8 buffer via SIMD convolution (`fast_image_resize`).
+/// Same filter as `image::imageops::FilterType::Lanczos3`, roughly an order of
+/// magnitude faster on multi-megapixel inputs.
+fn resize_lanczos3(
+    src: &[u8],
+    src_size: (u32, u32),
+    dst_size: (u32, u32),
+    pixel_type: PixelType,
+) -> Result<Vec<u8>, AppError> {
+    if src_size == dst_size {
+        return Ok(src.to_vec());
     }
-    Ok(tensor)
+    let src_image = ImageRef::new(src_size.0, src_size.1, src, pixel_type).map_err(resize_error)?;
+    let mut dst_image = Image::new(dst_size.0, dst_size.1, pixel_type);
+    // Default options = Convolution(Lanczos3); U8 / U8x3 have no alpha to premultiply.
+    Resizer::new()
+        .resize(&src_image, &mut dst_image, None)
+        .map_err(resize_error)?;
+    Ok(dst_image.into_vec())
+}
+
+pub fn preprocess(model: &ModelEntry, image: &DynamicImage) -> Result<Array4<f32>, AppError> {
+    match image {
+        DynamicImage::ImageRgb8(rgb) => preprocess_rgb(model, rgb),
+        other => preprocess_rgb(model, &other.to_rgb8()),
+    }
+}
+
+/// Resize to the model input and normalize into an NCHW `[1, 3, size, size]` tensor.
+pub fn preprocess_rgb(model: &ModelEntry, rgb: &RgbImage) -> Result<Array4<f32>, AppError> {
+    let size = model.input_size;
+    let resized = resize_lanczos3(
+        rgb.as_raw(),
+        rgb.dimensions(),
+        (size, size),
+        PixelType::U8x3,
+    )?;
+
+    // (v / 255 - mean) / std  ==  v * scale + bias, hoisted per channel.
+    let mut scale = [0f32; 3];
+    let mut bias = [0f32; 3];
+    for c in 0..3 {
+        let mean = model.mean.get(c).copied().unwrap_or(0.0);
+        let std = model.std.get(c).copied().unwrap_or(1.0);
+        scale[c] = 1.0 / (255.0 * std);
+        bias[c] = -mean / std;
+    }
+
+    let plane = size as usize * size as usize;
+    let mut data = vec![0f32; 3 * plane];
+    let (r, gb) = data.split_at_mut(plane);
+    let (g, b) = gb.split_at_mut(plane);
+    for (i, px) in resized.as_chunks::<3>().0.iter().enumerate() {
+        r[i] = px[0] as f32 * scale[0] + bias[0];
+        g[i] = px[1] as f32 * scale[1] + bias[1];
+        b[i] = px[2] as f32 * scale[2] + bias[2];
+    }
+    Array4::from_shape_vec([1, 3, size as usize, size as usize], data)
+        .map_err(|e| AppError::Pipeline(format!("tensor shape: {e}")))
 }
 
 pub fn postprocess(
@@ -25,64 +76,58 @@ pub fn postprocess(
     original_size: (u32, u32),
     output: &ndarray::ArrayD<f32>,
 ) -> Result<GrayImage, AppError> {
-    match model.postprocess {
-        crate::models::PostprocessKind::MinMax => postprocess_minmax(original_size, output),
+    let (h, w, logits) = extract_logits(output)?;
+    let mask = match model.postprocess {
+        crate::models::PostprocessKind::MinMax => quantize_minmax(&logits, |v| v),
         // BiRefNet logits: sigmoid then min-max (raw min-max on unbounded logits is washed).
-        crate::models::PostprocessKind::SigmoidMinMax => {
-            postprocess_sigmoid_minmax(original_size, output)
-        }
-    }
+        crate::models::PostprocessKind::SigmoidMinMax => quantize_minmax(&logits, sigmoid),
+    };
+    resize_feather(original_size, (w as u32, h as u32), mask)
 }
 
-fn postprocess_minmax(
-    original_size: (u32, u32),
-    output: &ndarray::ArrayD<f32>,
-) -> Result<GrayImage, AppError> {
-    let (h, w, logits) = extract_logits(output)?;
-    normalize_resize_feather(original_size, h, w, &logits)
+fn sigmoid(v: f32) -> f32 {
+    1.0 / (1.0 + (-v).exp())
 }
 
-/// BiRefNet: apply sigmoid before min-max stretch.
-fn postprocess_sigmoid_minmax(
-    original_size: (u32, u32),
-    output: &ndarray::ArrayD<f32>,
-) -> Result<GrayImage, AppError> {
-    let (h, w, logits) = extract_logits(output)?;
-    let probs: Vec<f32> = logits.iter().map(|&v| 1.0 / (1.0 + (-v).exp())).collect();
-    normalize_resize_feather(original_size, h, w, &probs)
-}
-
-fn normalize_resize_feather(
-    original_size: (u32, u32),
-    h: usize,
-    w: usize,
-    values: &[f32],
-) -> Result<GrayImage, AppError> {
-    let min = values.iter().copied().fold(f32::INFINITY, f32::min);
-    let max = values.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+/// Map `f(values)` onto 0..=255 with a min-max stretch, in one allocation.
+fn quantize_minmax(values: &[f32], f: impl Fn(f32) -> f32) -> Vec<u8> {
+    let (min, max) = values
+        .iter()
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &v| {
+            (lo.min(v), hi.max(v))
+        });
+    // `f` is monotonic non-decreasing (identity / sigmoid), so the stretch bounds
+    // are just `f` of the raw bounds — no second pass over transformed values.
+    let (min, max) = (f(min), f(max));
     let range = max - min;
-    let mut mask = GrayImage::new(w as u32, h as u32);
-    for y in 0..h {
-        for x in 0..w {
-            let v = values[y * w + x];
-            let n = if range == 0.0 { 0.0 } else { (v - min) / range };
-            let p = (n * 255.0).round() as u8;
-            mask.put_pixel(x as u32, y as u32, image::Luma([p]));
-        }
+    if range == 0.0 || !range.is_finite() {
+        return vec![0; values.len()];
     }
-    let resized = image::imageops::resize(
-        &mask,
-        original_size.0,
-        original_size.1,
-        FilterType::Lanczos3,
-    );
+    let k = 255.0 / range;
+    values
+        .iter()
+        .map(|&v| ((f(v) - min) * k).round() as u8)
+        .collect()
+}
+
+fn resize_feather(
+    original_size: (u32, u32),
+    mask_size: (u32, u32),
+    mask: Vec<u8>,
+) -> Result<GrayImage, AppError> {
+    let resized = resize_lanczos3(&mask, mask_size, original_size, PixelType::U8)?;
+    let resized = GrayImage::from_raw(original_size.0, original_size.1, resized)
+        .ok_or_else(|| AppError::Pipeline("resized mask buffer size mismatch".into()))?;
     // Light Gaussian feathering on the mask edges keeps hair/fur borders from looking
     // pixelated and hard after resizing back to the original resolution.
-    let feathered = image::imageops::blur(&resized, 1.0);
-    Ok(feathered)
+    Ok(image::imageops::blur(&resized, 1.0))
 }
 
-fn extract_logits(output: &ndarray::ArrayD<f32>) -> Result<(usize, usize, Vec<f32>), AppError> {
+/// Borrow the `[1, 1, h, w]` logits as a flat row-major slice (copy only if the
+/// tensor is not in standard layout, which ORT outputs always are).
+fn extract_logits(
+    output: &ndarray::ArrayD<f32>,
+) -> Result<(usize, usize, std::borrow::Cow<'_, [f32]>), AppError> {
     let shape = output.shape();
     if shape.len() != 4 || shape[0] != 1 || shape[1] != 1 {
         return Err(AppError::Pipeline(format!(
@@ -90,14 +135,11 @@ fn extract_logits(output: &ndarray::ArrayD<f32>) -> Result<(usize, usize, Vec<f3
             shape
         )));
     }
-    let h = shape[2];
-    let w = shape[3];
-    let logits: Vec<f32> = output
-        .index_axis(Axis(0), 0)
-        .index_axis(Axis(0), 0)
-        .iter()
-        .copied()
-        .collect();
+    let (h, w) = (shape[2], shape[3]);
+    let logits = match output.as_slice() {
+        Some(slice) => std::borrow::Cow::Borrowed(slice),
+        None => std::borrow::Cow::Owned(output.iter().copied().collect()),
+    };
     Ok((h, w, logits))
 }
 
