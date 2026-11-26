@@ -3,6 +3,7 @@ use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use ndarray::Array4;
+use ort::environment::Environment;
 use ort::ep::ExecutionProviderDispatch;
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
@@ -25,6 +26,23 @@ static SESSION_CACHE: Mutex<Option<HashMap<(String, String), Session>>> = Mutex:
 
 /// Last successful use of any cached session (for idle TTL).
 static SESSION_LAST_USE: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// ort allows a single environment per process and only keeps a weak reference,
+/// so it lives here for the life of the app. Build errors are kept as strings so
+/// every later caller sees the same failure instead of a confusing "only one
+/// environment" error on retry.
+static ORT_ENV: LazyLock<Result<Environment, String>> = LazyLock::new(|| {
+    ort::init()
+        .with_name("swiftmask")
+        .build()
+        .map_err(|e| e.to_string())
+});
+
+pub fn ort_environment() -> Result<&'static Environment, AppError> {
+    ORT_ENV
+        .as_ref()
+        .map_err(|e| crate::error::inference_error(format!("ONNX Runtime init failed: {e}")))
+}
 
 static DETECTED_VRAM: LazyLock<Option<u64>> =
     LazyLock::new(|| crate::gpu::detect_gpu().ok().and_then(|g| g.vram_bytes));
@@ -64,7 +82,7 @@ pub fn load_session_from_bytes(model_bytes: &[u8], ep: &str) -> Result<Session, 
     let opt_level = optimization_level_for_vram(*DETECTED_VRAM);
     let dml = is_directml(ep);
 
-    let mut builder = Session::builder()
+    let mut builder = Session::builder(ort_environment()?)
         .map_err(|e| crate::error::inference_error(e.to_string()))?
         .with_optimization_level(opt_level)
         .map_err(|e| crate::error::inference_error(e.to_string()))?;
@@ -383,16 +401,18 @@ mod tests {
             ort::ep::CUDA::default().build().error_on_failure(),
             ort::ep::CPU::default().build(),
         ];
-        let session = Session::builder()
-            .map_err(|e| crate::error::inference_error(e.to_string()))
-            .unwrap()
-            .with_optimization_level(GraphOptimizationLevel::Level1)
-            .map_err(|e| crate::error::inference_error(e.to_string()))
-            .unwrap()
-            .with_execution_providers(providers)
-            .map_err(|e| crate::error::inference_error(e.to_string()))
-            .unwrap()
-            .commit_from_memory(U2NETP_MODEL_BYTES);
+        // rc.15+ surfaces missing CUDA runtime libs at EP registration, not only at
+        // commit, so treat either step failing as "GPU not usable here".
+        let session = (|| -> Result<Session, String> {
+            Session::builder(ort_environment().unwrap())
+                .map_err(|e| e.to_string())?
+                .with_optimization_level(GraphOptimizationLevel::Level1)
+                .map_err(|e| e.to_string())?
+                .with_execution_providers(providers)
+                .map_err(|e| e.to_string())?
+                .commit_from_memory(U2NETP_MODEL_BYTES)
+                .map_err(|e| e.to_string())
+        })();
         let mut session = match session {
             Ok(s) => s,
             Err(e) => {

@@ -1068,7 +1068,15 @@ mod tests {
                 download_to_file(&model, &path_for_task, |_, _| {}, Some(&s)).await
             })
         };
-        tokio::time::sleep(Duration::from_millis(30)).await;
+        // Cancel only once bytes have hit disk. A fixed sleep raced HTTP client
+        // startup (rustls platform verifier) under parallel test load.
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while !is_nonempty_file(&partial) {
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+        })
+        .await
+        .expect("download never wrote to the partial file");
         state.cancel();
         let err = dl.await.unwrap().expect_err("expected cancelled");
         assert!(is_cancelled(&err), "got {err}");
