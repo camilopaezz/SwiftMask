@@ -1,4 +1,4 @@
-//! Stage-by-stage CPU benchmark of the background-removal pipeline.
+//! Stage-by-stage benchmark of the background-removal pipeline.
 //!
 //! ```bash
 //! cargo run --release --manifest-path src-tauri/Cargo.toml --example pipeline_bench
@@ -12,6 +12,7 @@
 //! `BENCH_DUMP_MASK=out.png` saves the alpha mask (for comparing pipeline changes).
 //! Without `BENCH_IMAGE` a synthetic 4032x3024 JPEG (12 MP phone photo) is used.
 //! Without `BENCH_ONNX` the bundled u2netp model runs.
+//! `BENCH_EP=cuda` runs on CUDA and fails instead of silently falling back to CPU.
 
 use std::time::{Duration, Instant};
 
@@ -32,6 +33,19 @@ fn time<T>(label: &str, runs: usize, mut f: impl FnMut() -> T) -> T {
         best.as_secs_f64() * 1e3
     );
     out.expect("runs > 0")
+}
+
+fn load_session(onnx: &[u8], ep: &str) -> ort::session::Session {
+    if ep != inference::EP_CUDA {
+        return inference::load_session_from_bytes(onnx, ep).unwrap();
+    }
+    // The app registers CUDA leniently (CPU fallback). Benchmarks must not.
+    ort::session::Session::builder(inference::ort_environment().unwrap())
+        .unwrap()
+        .with_execution_providers([ort::ep::CUDA::default().build().error_on_failure()])
+        .unwrap()
+        .commit_from_memory(onnx)
+        .expect("CUDA session (is the CUDA 13 + cuDNN 9 runtime installed?)")
 }
 
 fn synthetic_jpeg() -> Vec<u8> {
@@ -84,9 +98,9 @@ fn main() {
     });
     let rgb = time("into_rgb8", 1, || img.clone().into_rgb8());
 
-    let mut session = time("session load", 1, || {
-        inference::load_session_from_bytes(&onnx, inference::EP_CPU).unwrap()
-    });
+    let ep = std::env::var("BENCH_EP").unwrap_or_else(|_| inference::EP_CPU.into());
+    println!("execution prov.  {ep}");
+    let mut session = time("session load", 1, || load_session(&onnx, &ep));
     // Warm-up run so the timed runs measure steady state.
     let _ = inference::run(&mut session, &tensor).unwrap();
     let output = time("inference", runs, || {
