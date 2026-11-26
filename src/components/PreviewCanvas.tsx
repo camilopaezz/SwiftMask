@@ -152,12 +152,14 @@ function CompareSlider({
         src={outputUrl}
         alt=""
         draggable={false}
+        decoding="async"
       />
       <img
         className="compare-img compare-img-before"
         src={inputUrl}
         alt=""
         draggable={false}
+        decoding="async"
         style={{ clipPath: beforeClip }}
       />
       <div
@@ -220,11 +222,21 @@ export function PreviewCanvas({
             className="preview-image-frame"
             style={{ ["--img-ar" as string]: String(aspectRatio) }}
           >
-            <img src={inputUrl} alt={t("preview.inputAlt")} draggable={false} />
+            <img
+              src={inputUrl}
+              alt={t("preview.inputAlt")}
+              draggable={false}
+              decoding="async"
+            />
           </div>
         ) : inputUrl ? (
           <div className="preview-image-frame preview-image-frame-fallback">
-            <img src={inputUrl} alt={t("preview.inputAlt")} draggable={false} />
+            <img
+              src={inputUrl}
+              alt={t("preview.inputAlt")}
+              draggable={false}
+              decoding="async"
+            />
           </div>
         ) : null}
       </div>
