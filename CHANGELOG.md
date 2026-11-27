@@ -12,6 +12,7 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 - Preview images decode off the main thread, so the window stays responsive while large results load
 - Development builds optimize dependencies, so processing in `tauri dev` takes about a second instead of ~20 s
 - Updated dependencies: Tauri 2.12 and plugins, ONNX Runtime 1.31 (ort rc.15), Vite 8, Vitest 5, React 19.3, i18next 27
+- **Linux GPU acceleration now needs CUDA 13** (plus cuDNN 9), up from CUDA 12. Without it SwiftMask falls back to CPU automatically.
 
 ## [1.3.0] - 2026-09-28
 
