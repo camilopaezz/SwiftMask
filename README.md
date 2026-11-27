@@ -84,7 +84,7 @@ Supported input formats: **PNG, JPG, WEBP, BMP**.
 | **Balanced**    | isnet-general-use                                      | ~178 MB | Apache-2.0 (download on first use; good default)                                                |
 | **Balanced+**   | rmbg-1.4                                               | ~176 MB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use)         |
 | **High**        | birefnet-general-lite (`birefnet-lite-512.onnx`, 512²) | ~183 MB | [MIT](https://opensource.org/licenses/MIT) (download on first use; lower VRAM than 1024 models) |
-| **Max Quality** | rmbg-2.0                                               | ~173 MB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use)         |
+| **Max Quality** | rmbg-2.0                                               | ~1.0 GB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use)         |
 
 A small bundled model (`u2netp`) is used only for offline GPU/CPU **benchmarks** — it is not offered as a quality mode.
 

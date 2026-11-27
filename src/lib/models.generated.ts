@@ -81,7 +81,7 @@ export const MODEL_REGISTRY: readonly ModelStaticMeta[] = [
     id: "rmbg-2.0",
     name: "Max Quality",
     file: "rmbg-2.0.onnx",
-    size_bytes: 173000000,
+    size_bytes: 1024331469,
     input_size: 1024,
     mean: [0.485, 0.456, 0.406],
     std: [0.229, 0.224, 0.225],

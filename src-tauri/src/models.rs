@@ -156,7 +156,7 @@ fn registry() -> &'static [ModelEntry] {
                 id: "rmbg-2.0".into(),
                 name: "Max Quality".into(),
                 file: "rmbg-2.0.onnx".into(),
-                size_bytes: 173_000_000,
+                size_bytes: 1_024_331_469,
                 input_size: 1024,
                 mean: vec![0.485, 0.456, 0.406],
                 std: vec![0.229, 0.224, 0.225],
