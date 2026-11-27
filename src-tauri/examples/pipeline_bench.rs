@@ -40,9 +40,21 @@ fn load_session(onnx: &[u8], ep: &str) -> ort::session::Session {
         return inference::load_session_from_bytes(onnx, ep).unwrap();
     }
     // The app registers CUDA leniently (CPU fallback). Benchmarks must not.
-    ort::session::Session::builder(inference::ort_environment().unwrap())
-        .unwrap()
-        .with_execution_providers([ort::ep::CUDA::default().build().error_on_failure()])
+    let mut cuda = ort::ep::CUDA::default();
+    // BENCH_CUDA_LEAN=1: grow the arena only by what is requested and cap cuDNN workspace.
+    if std::env::var_os("BENCH_CUDA_LEAN").is_some() {
+        cuda = cuda
+            .with_arena_extend_strategy(ort::ep::ArenaExtendStrategy::SameAsRequested)
+            .with_conv_algorithm_search(ort::ep::cuda::ConvAlgorithmSearch::Heuristic)
+            .with_conv_max_workspace(false);
+    }
+    let mut builder =
+        ort::session::Session::builder(inference::ort_environment().unwrap()).unwrap();
+    if std::env::var_os("BENCH_NO_MEMPATTERN").is_some() {
+        builder = builder.with_memory_pattern(false).unwrap();
+    }
+    builder
+        .with_execution_providers([cuda.build().error_on_failure()])
         .unwrap()
         .commit_from_memory(onnx)
         .expect("CUDA session (is the CUDA 13 + cuDNN 9 runtime installed?)")
@@ -83,7 +95,18 @@ fn main() {
         None => synthetic_jpeg(),
     };
     let model_id = std::env::var("BENCH_MODEL").unwrap_or_else(|_| "u2netp".into());
-    let model = models::find_model(&model_id).expect("known model id");
+    let mut entry = models::find_model(&model_id)
+        .expect("known model id")
+        .clone();
+    // BENCH_INPUT_SIZE overrides the model's square input (dynamic-shape models only).
+    if let Some(n) = std::env::var("BENCH_INPUT_SIZE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
+        entry.input_size = n;
+    }
+    println!("input size       {}", entry.input_size);
+    let model = &entry;
     let onnx = match std::env::var_os("BENCH_ONNX") {
         Some(p) => std::fs::read(p).expect("read BENCH_ONNX"),
         None => inference::U2NETP_MODEL_BYTES.to_vec(),
