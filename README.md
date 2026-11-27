@@ -128,7 +128,7 @@ Report bugs and feature requests on **[GitHub Issues](https://github.com/camilop
 ### Prerequisites
 
 - [Bun](https://bun.sh) — package manager (`bun.lock` is canonical; do not commit `package-lock.json`)
-- [Rust](https://rustup.rs) 1.88+ (stable)
+- [Rust](https://rustup.rs) 1.92+ (stable)
 - Platform libraries for Tauri — see [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
 
 **Optional GPU support**

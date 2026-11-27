@@ -1,4 +1,5 @@
-use fast_image_resize::images::{Image, ImageRef};
+use fast_image_resize::images::{Image, ImageRef, TypedImage, TypedImageRef};
+use fast_image_resize::pixels::F32;
 use fast_image_resize::{PixelType, Resizer};
 use image::{DynamicImage, GrayImage, RgbImage};
 use ndarray::Array4;
@@ -115,7 +116,21 @@ fn resize_feather(
     mask_size: (u32, u32),
     mask: Vec<u8>,
 ) -> Result<GrayImage, AppError> {
-    let resized = resize_lanczos3(&mask, mask_size, original_size, PixelType::U8)?;
+    // f32 like `image::imageops::resize`: a u8 resize clamps and rounds between the
+    // two Lanczos passes, which moves hard mask edges by up to ~40 alpha levels.
+    let resized = {
+        let src: Vec<F32> = mask.iter().map(|&v| F32::new(v as f32)).collect();
+        let src = TypedImageRef::new(mask_size.0, mask_size.1, &src).map_err(resize_error)?;
+        let mut dst = TypedImage::<F32>::new(original_size.0, original_size.1);
+        Resizer::new()
+            .resize_typed(&src, &mut dst, None)
+            .map_err(resize_error)?;
+        // Collected into u8 here so the f32 buffers are freed before the blur.
+        dst.pixels()
+            .iter()
+            .map(|p| p.0.round().clamp(0.0, 255.0) as u8)
+            .collect()
+    };
     let resized = GrayImage::from_raw(original_size.0, original_size.1, resized)
         .ok_or_else(|| AppError::Pipeline("resized mask buffer size mismatch".into()))?;
     // Light Gaussian feathering on the mask edges keeps hair/fur borders from looking
@@ -311,5 +326,27 @@ mod tests {
             postprocess(model, (2, 2), &output)
                 .unwrap_or_else(|e| panic!("{} postprocess failed: {e}", model.id));
         }
+    }
+
+    #[test]
+    fn hard_mask_upscale_matches_image_crate_lanczos3() {
+        // Binary diagonal mask: the worst case for intermediate rounding/clamping.
+        let (src, dst) = ((320u32, 320u32), (1008u32, 756u32));
+        let mask: Vec<u8> = (0..src.0 * src.1)
+            .map(|i| if i % src.0 > i / src.0 { 255 } else { 0 })
+            .collect();
+        let gray = GrayImage::from_raw(src.0, src.1, mask.clone()).unwrap();
+        let reference = image::imageops::blur(
+            &image::imageops::resize(&gray, dst.0, dst.1, image::imageops::FilterType::Lanczos3),
+            1.0,
+        );
+        let ours = resize_feather(dst, src, mask).unwrap();
+        let max_diff = reference
+            .pixels()
+            .zip(ours.pixels())
+            .map(|(a, b)| a[0].abs_diff(b[0]))
+            .max()
+            .unwrap();
+        assert!(max_diff <= 2, "max diff {max_diff}");
     }
 }

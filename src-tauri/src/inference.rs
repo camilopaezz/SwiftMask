@@ -31,29 +31,43 @@ static SESSION_LAST_USE: Mutex<Option<Instant>> = Mutex::new(None);
 /// to CPU: retrying the GPU costs a full session load (~8 s for rmbg-2.0) before
 /// failing again, and the OOM cleanup also drops the warm CPU session.
 ///
-/// Survives the idle TTL on purpose; cleared by [`invalidate_all_sessions`]
-/// (EP change, benchmark, worker panic) or an app restart.
-pub struct GpuOomMemo(Mutex<Vec<(String, String)>>);
+/// Entries expire after [`GPU_OOM_RETRY_AFTER`] so an OOM caused by other cached
+/// sessions holding VRAM does not pin the model to CPU for good. Also cleared by
+/// [`invalidate_all_sessions`] (EP change, benchmark, worker panic) or an app restart.
+pub struct GpuOomMemo {
+    pairs: Mutex<Vec<(String, String, Instant)>>,
+    retry_after: Duration,
+}
+
+/// How long a GPU OOM sends that model straight to CPU before the GPU is tried again.
+const GPU_OOM_RETRY_AFTER: Duration = Duration::from_secs(10 * 60);
 
 impl GpuOomMemo {
     pub const fn new() -> Self {
-        Self(Mutex::new(Vec::new()))
+        Self::with_retry_after(GPU_OOM_RETRY_AFTER)
     }
 
-    fn pairs(&self) -> std::sync::MutexGuard<'_, Vec<(String, String)>> {
-        self.0.lock().unwrap_or_else(|e| e.into_inner())
+    const fn with_retry_after(retry_after: Duration) -> Self {
+        Self {
+            pairs: Mutex::new(Vec::new()),
+            retry_after,
+        }
+    }
+
+    fn pairs(&self) -> std::sync::MutexGuard<'_, Vec<(String, String, Instant)>> {
+        self.pairs.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     pub fn contains(&self, model_id: &str, ep: &str) -> bool {
-        self.pairs()
-            .iter()
-            .any(|(m, e)| m == model_id && e.eq_ignore_ascii_case(ep))
+        self.pairs().iter().any(|(m, e, at)| {
+            m == model_id && e.eq_ignore_ascii_case(ep) && at.elapsed() < self.retry_after
+        })
     }
 
     pub fn mark(&self, model_id: &str, ep: &str) {
-        if !self.contains(model_id, ep) {
-            self.pairs().push((model_id.to_string(), ep.to_string()));
-        }
+        let mut pairs = self.pairs();
+        pairs.retain(|(m, e, _)| !(m == model_id && e.eq_ignore_ascii_case(ep)));
+        pairs.push((model_id.to_string(), ep.to_string(), Instant::now()));
     }
 
     pub fn clear(&self) {
@@ -653,6 +667,19 @@ mod tests {
             reloads, 1,
             "OOM must wipe sibling sessions, not only the failing key"
         );
+    }
+
+    #[test]
+    fn gpu_oom_memo_expires() {
+        let memo = GpuOomMemo::with_retry_after(Duration::ZERO);
+        memo.mark("rmbg-2.0", EP_CUDA);
+        assert!(
+            !memo.contains("rmbg-2.0", EP_CUDA),
+            "GPU is retried after the deadline"
+        );
+        let memo = GpuOomMemo::new();
+        memo.mark("rmbg-2.0", EP_CUDA);
+        assert!(memo.contains("rmbg-2.0", EP_CUDA));
     }
 
     #[test]

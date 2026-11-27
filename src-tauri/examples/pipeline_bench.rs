@@ -39,6 +39,16 @@ fn load_session(onnx: &[u8], ep: &str) -> ort::session::Session {
     if ep != inference::EP_CUDA {
         return inference::load_session_from_bytes(onnx, ep).unwrap();
     }
+    cuda_session(onnx)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn cuda_session(_onnx: &[u8]) -> ort::session::Session {
+    panic!("BENCH_EP=cuda is Linux-only (ort is built without the cuda feature here)");
+}
+
+#[cfg(target_os = "linux")]
+fn cuda_session(onnx: &[u8]) -> ort::session::Session {
     // The app registers CUDA leniently (CPU fallback). Benchmarks must not.
     let mut cuda = ort::ep::CUDA::default();
     // BENCH_CUDA_LEAN=1: grow the arena only by what is requested and cap cuDNN workspace.

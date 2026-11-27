@@ -5,7 +5,7 @@ description = "SwiftMask — local background removal desktop app"
 authors = ["SwiftMask contributors"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.92"
 default-run = "swiftmask"
 
 [lib]
