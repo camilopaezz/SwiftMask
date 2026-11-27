@@ -188,6 +188,7 @@ pub async fn remove_image_background(
                 execution_provider: &execution_provider,
                 model_is_ready: &model_is_ready,
                 run_inference: &run_inference,
+                gpu_oom: &crate::inference::GPU_OOM_MEMO,
             };
             crate::job::run(&args, &processing_state, &deps)
         }));

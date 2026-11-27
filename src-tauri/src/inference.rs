@@ -27,6 +27,48 @@ static SESSION_CACHE: Mutex<Option<HashMap<(String, String), Session>>> = Mutex:
 /// Last successful use of any cached session (for idle TTL).
 static SESSION_LAST_USE: Mutex<Option<Instant>> = Mutex::new(None);
 
+/// (model_id, ep) pairs that ran out of GPU memory. Jobs for these go straight
+/// to CPU: retrying the GPU costs a full session load (~8 s for rmbg-2.0) before
+/// failing again, and the OOM cleanup also drops the warm CPU session.
+///
+/// Survives the idle TTL on purpose; cleared by [`invalidate_all_sessions`]
+/// (EP change, benchmark, worker panic) or an app restart.
+pub struct GpuOomMemo(Mutex<Vec<(String, String)>>);
+
+impl GpuOomMemo {
+    pub const fn new() -> Self {
+        Self(Mutex::new(Vec::new()))
+    }
+
+    fn pairs(&self) -> std::sync::MutexGuard<'_, Vec<(String, String)>> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn contains(&self, model_id: &str, ep: &str) -> bool {
+        self.pairs()
+            .iter()
+            .any(|(m, e)| m == model_id && e.eq_ignore_ascii_case(ep))
+    }
+
+    pub fn mark(&self, model_id: &str, ep: &str) {
+        if !self.contains(model_id, ep) {
+            self.pairs().push((model_id.to_string(), ep.to_string()));
+        }
+    }
+
+    pub fn clear(&self) {
+        self.pairs().clear();
+    }
+}
+
+impl Default for GpuOomMemo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub static GPU_OOM_MEMO: GpuOomMemo = GpuOomMemo::new();
+
 /// ort allows a single environment per process and only keeps a weak reference,
 /// so it lives here for the life of the app. Build errors are kept as strings so
 /// every later caller sees the same failure instead of a confusing "only one
@@ -110,6 +152,7 @@ pub fn load_session_from_bytes(model_bytes: &[u8], ep: &str) -> Result<Session, 
 /// still show a high working set until we trim it.
 pub fn invalidate_all_sessions() {
     release_all_sessions();
+    GPU_OOM_MEMO.clear();
 }
 
 /// Take ownership of the cache so `Session` Drop runs outside the mutex.
@@ -610,6 +653,16 @@ mod tests {
             reloads, 1,
             "OOM must wipe sibling sessions, not only the failing key"
         );
+    }
+
+    #[test]
+    fn invalidate_all_sessions_forgets_gpu_oom() {
+        let _lock = lock_session_cache_for_test();
+        GPU_OOM_MEMO.mark("rmbg-2.0", EP_CUDA);
+        assert!(GPU_OOM_MEMO.contains("rmbg-2.0", "CUDA"));
+        assert!(!GPU_OOM_MEMO.contains("isnet-general-use", EP_CUDA));
+        invalidate_all_sessions();
+        assert!(!GPU_OOM_MEMO.contains("rmbg-2.0", EP_CUDA));
     }
 
     #[test]

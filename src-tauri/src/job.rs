@@ -32,6 +32,8 @@ pub struct JobDeps<'a> {
     /// Session load + forward pass. Implementations must load the model for `ep`
     /// (e.g. via `with_session`) so load-time OOM still participates in GPU→CPU fallback.
     pub run_inference: &'a RunInferenceFn<'a>,
+    /// Models that already ran out of GPU memory; those jobs start on CPU.
+    pub gpu_oom: &'a crate::inference::GpuOomMemo,
 }
 
 fn ep_is_cpu(ep: &str) -> bool {
@@ -110,27 +112,42 @@ fn run_inner(
     state.check_cancel()?;
     let timer_infer = StageTimer::start("inferring");
     let ep = (deps.execution_provider)()?;
+    let skip_gpu = !ep_is_cpu(&ep) && deps.gpu_oom.contains(&job.model_id, &ep);
     // Scope so the preprocess tensor (e.g. ~12 MiB at 1024², ~3 MiB at 512²) is
     // dropped before postprocess on success. Multi-GB pressure is the ORT
     // session, released inside with_session when the infer closure returns.
     let output = {
         let tensor = tensor;
-        match (deps.run_inference)(&job.model_id, &ep, &tensor) {
-            Ok(output) => {
+        let gpu_result = (!skip_gpu).then(|| (deps.run_inference)(&job.model_id, &ep, &tensor));
+        match gpu_result {
+            Some(Ok(output)) => {
                 stages.push(timer_infer.finish());
                 output
             }
-            Err(e) if crate::inference::is_likely_oom(&e) && !ep_is_cpu(&ep) => {
-                stages.push(timer_infer.finish());
+            Some(Err(e)) if !(crate::inference::is_likely_oom(&e) && !ep_is_cpu(&ep)) => {
+                return Err(e);
+            }
+            // GPU ran out of memory now, or did on an earlier job for this model.
+            gpu_result => {
+                if gpu_result.is_some() {
+                    stages.push(timer_infer.finish());
+                    deps.gpu_oom.mark(&job.model_id, &ep);
+                    log::warn!(
+                        "inference OOM on execution provider '{ep}'; retrying on {}",
+                        crate::inference::EP_CPU
+                    );
+                } else {
+                    log::info!(
+                        "'{}' ran out of memory on '{ep}' earlier; running on {}",
+                        job.model_id,
+                        crate::inference::EP_CPU
+                    );
+                }
                 state.check_cancel()?;
                 deps.sink
                     .on_fallback("oom", &ep, crate::inference::EP_CPU)?;
                 // Sink may cancel during on_fallback; re-check before progress/CPU work.
                 state.check_cancel()?;
-                log::warn!(
-                    "inference OOM on execution provider '{ep}'; retrying on {}",
-                    crate::inference::EP_CPU
-                );
                 deps.sink.on_progress("inferring-cpu", 50.0)?;
                 state.check_cancel()?;
                 let timer_cpu = StageTimer::start("inferring-cpu");
@@ -139,7 +156,6 @@ fn run_inner(
                 stages.push(timer_cpu.finish());
                 output
             }
-            Err(e) => return Err(e),
         }
     };
 
@@ -277,6 +293,7 @@ mod tests {
             execution_provider: &ep_cpu,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         let err = run(&job, &state, &deps).unwrap_err();
@@ -338,6 +355,7 @@ mod tests {
             execution_provider: &ep_cpu,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         let err = run(&job, &state, &deps).unwrap_err();
@@ -402,6 +420,7 @@ mod tests {
             execution_provider: &ep_cpu,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         let err = run(&job, &state, &deps).unwrap_err();
@@ -430,6 +449,7 @@ mod tests {
             execution_provider: &ep_cpu,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         let err = run(&job, &state, &deps).unwrap_err();
@@ -466,6 +486,7 @@ mod tests {
             execution_provider: &ep_cpu,
             model_is_ready: &ready_false,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         let err = run(&job, &state, &deps).unwrap_err();
@@ -505,6 +526,7 @@ mod tests {
             execution_provider: &ep_cpu,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         run(&job, &state, &deps).expect("happy path should succeed");
@@ -606,6 +628,7 @@ mod tests {
             execution_provider: &ep_directml,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         run(&job, &state, &deps).expect("CPU retry should succeed");
@@ -631,6 +654,74 @@ mod tests {
     }
 
     #[test]
+    fn gpu_oom_is_remembered_for_later_jobs() {
+        let state = ProcessingState::new();
+        let dir = tempfile::tempdir().unwrap();
+        let (job, output) = make_u2netp_job(&dir);
+        let recorder = Recorder::new();
+        let gpu_calls = Mutex::new(0usize);
+        let memo = crate::inference::GpuOomMemo::new();
+
+        let run_inference = |model_id: &str, ep: &str, tensor: &Array4<f32>| {
+            if ep.eq_ignore_ascii_case("directml") {
+                *gpu_calls.lock().unwrap() += 1;
+                return Err(crate::error::inference_error("CUDA out of memory"));
+            }
+            let _lock = crate::inference::lock_session_cache_for_test();
+            let model = crate::models::find_model(model_id)?;
+            crate::inference::with_session(
+                model_id,
+                ep,
+                || load_u2netp(model),
+                |session| crate::inference::run(session, tensor),
+            )
+        };
+        let deps = JobDeps {
+            sink: &recorder,
+            execution_provider: &ep_directml,
+            model_is_ready: &ready_true,
+            run_inference: &run_inference,
+            gpu_oom: &memo,
+        };
+
+        run(&job, &state, &deps).expect("first job falls back to CPU");
+        std::fs::remove_file(&output).unwrap();
+        run(&job, &state, &deps).expect("second job runs on CPU");
+
+        assert_eq!(*gpu_calls.lock().unwrap(), 1, "GPU must not be retried");
+        assert!(memo.contains("u2netp", "DirectML"));
+        // The user still hears that the job finished on CPU.
+        assert_eq!(recorder.fallbacks.lock().unwrap().len(), 2);
+        let timings = recorder.timings.lock().unwrap().clone().unwrap();
+        let stages: Vec<_> = timings.stages.iter().map(|t| t.stage.as_str()).collect();
+        assert!(!stages.contains(&"inferring"), "skipped GPU has no timing");
+        assert!(stages.contains(&"inferring-cpu"));
+        assert!(output.exists());
+    }
+
+    #[test]
+    fn non_oom_gpu_error_is_not_remembered() {
+        let state = ProcessingState::new();
+        let dir = tempfile::tempdir().unwrap();
+        let (job, _output) = make_u2netp_job(&dir);
+        let recorder = Recorder::new();
+        let memo = crate::inference::GpuOomMemo::new();
+        let run_inference = |_model_id: &str, _ep: &str, _tensor: &Array4<f32>| {
+            Err(crate::error::inference_error("model produced no outputs"))
+        };
+        let deps = JobDeps {
+            sink: &recorder,
+            execution_provider: &ep_directml,
+            model_is_ready: &ready_true,
+            run_inference: &run_inference,
+            gpu_oom: &memo,
+        };
+
+        run(&job, &state, &deps).unwrap_err();
+        assert!(!memo.contains("u2netp", "directml"));
+    }
+
+    #[test]
     fn cpu_oom_no_fallback() {
         let state = ProcessingState::new();
         let dir = tempfile::tempdir().unwrap();
@@ -646,6 +737,7 @@ mod tests {
             execution_provider: &ep_cpu,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         let err = run(&job, &state, &deps).unwrap_err();
@@ -677,6 +769,7 @@ mod tests {
             execution_provider: &ep_directml,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         let err = run(&job, &state, &deps).unwrap_err();
@@ -713,6 +806,7 @@ mod tests {
             execution_provider: &ep_directml,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         let err = run(&job, &state, &deps).unwrap_err();
@@ -779,6 +873,7 @@ mod tests {
             execution_provider: &ep_directml,
             model_is_ready: &ready_true,
             run_inference: &run_inference,
+            gpu_oom: &crate::inference::GpuOomMemo::new(),
         };
 
         let err = run(&job, &state, &deps).unwrap_err();

@@ -17,6 +17,7 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 ### Fixed
 
 - Max Quality shows its real download size (~1.0 GB, was listed as 173 MB)
+- When a model runs out of GPU memory, later images go straight to CPU instead of retrying the GPU each time. On a 4 GB GPU this saves roughly 18 s per Max Quality image in a batch. Changing the execution provider or rerunning the benchmark tries the GPU again.
 
 ## [1.3.0] - 2026-09-28
 
