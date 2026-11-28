@@ -20,7 +20,7 @@ chmod +x swiftmask-linux.AppImage
 ```
 
 - No install step required.
-- **NVIDIA GPU (optional):** install proprietary drivers as usual. SwiftMask selects CUDA when the stack is available; otherwise it uses CPU.
+- **NVIDIA GPU (optional):** install the proprietary driver (R580 or newer), the CUDA 13 runtime and cuDNN 9 from your distro or NVIDIA. SwiftMask selects CUDA when they are available; otherwise it uses CPU.
 - If the window is blank or glitchy on some WebKit/GTK setups, try:
 
   ```bash
@@ -111,7 +111,7 @@ Default output name: `{original-stem}-nobg-{modelId}.png` next to the input (or 
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Blank / black window (Linux)**  | Launch with `WEBKIT_DISABLE_COMPOSITING_MODE=1`. Some Arch/CachyOS WebKit builds need this.                                                                                                                                   |
 | **AppImage won’t start**          | `chmod +x` the file. Ensure FUSE is available, extract with `./swiftmask-linux.AppImage --appimage-extract`, or install the `.deb` / `.rpm` instead.                                                                          |
-| **CUDA not used (Linux)**         | Install proprietary NVIDIA drivers. The title-bar chip should read **CUDA** when active. Without drivers, CPU is used automatically.                                                                                          |
+| **CUDA not used (Linux)**         | Install the proprietary NVIDIA driver (R580+), CUDA 13 and cuDNN 9. Without them, CPU is used automatically.                                                                                                                  |
 | **Windows SmartScreen**           | Expected for unsigned builds — _More info_ → _Run anyway_ if you trust the release.                                                                                                                                           |
 | **Download fails**                | Check network access to GitHub / Hugging Face. Incomplete files are re-downloaded and re-verified.                                                                                                                            |
 | **Out of memory on large images** | Prefer **Balanced** or **High** (High runs at 512² to cut VRAM vs 1024 models). Avoid **Max Quality** on low-VRAM GPUs, or use a smaller source image. GPU OOM may automatically retry on CPU when the backend can detect it. |
@@ -133,7 +133,7 @@ Report bugs and feature requests on **[GitHub Issues](https://github.com/camilop
 
 **Optional GPU support**
 
-- **Linux + NVIDIA**: recent proprietary drivers; CUDA execution provider is selected automatically when detected
+- **Linux + NVIDIA**: proprietary driver R580+, CUDA 13 runtime and cuDNN 9; the CUDA execution provider is selected automatically when detected
 - **Windows**: DirectML via the system GPU stack (no separate CUDA install)
 
 ### Quick start
