@@ -6,7 +6,7 @@ Built with [Tauri 2](https://v2.tauri.app), React, and Rust ([ONNX Runtime](http
 
 ![SwiftMask main window](docs/screenshots/01-main-window.png)
 
-*Main window — quality modes on the left, drop target on the right. The **CUDA** chip shows the active execution provider (your machine may show CPU or DirectML instead).*
+_Main window — quality modes on the left, drop target on the right. The **CUDA** chip shows the active execution provider (your machine may show CPU or DirectML instead)._
 
 ## Download
 
@@ -50,7 +50,7 @@ sudo rpm -i swiftmask-linux.rpm
 
 1. Download `swiftmask-windows-setup.exe` (NSIS) or `swiftmask-windows.msi` (MSI) from the release.
 2. Run the installer.
-3. **SmartScreen** may warn on unsigned builds — choose *More info* → *Run anyway* if you trust the release source. Signing is planned for later releases.
+3. **SmartScreen** may warn on unsigned builds — choose _More info_ → _Run anyway_ if you trust the release source. Signing is planned for later releases.
 
 ### First launch
 
@@ -79,18 +79,18 @@ Supported input formats: **PNG, JPG, WEBP, BMP**.
 
 ## Quality modes
 
-| Mode | Model | Size | License |
-|------|-------|------|---------|
-| **Balanced** | isnet-general-use | ~178 MB | Apache-2.0 (download on first use; good default) |
-| **Balanced+** | rmbg-1.4 | ~176 MB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use) |
-| **High** | birefnet-general-lite (`birefnet-lite-512.onnx`, 512²) | ~183 MB | [MIT](https://opensource.org/licenses/MIT) (download on first use; lower VRAM than 1024 models) |
-| **Max Quality** | rmbg-2.0 | ~173 MB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use) |
+| Mode            | Model                                                  | Size    | License                                                                                         |
+| --------------- | ------------------------------------------------------ | ------- | ----------------------------------------------------------------------------------------------- |
+| **Balanced**    | isnet-general-use                                      | ~178 MB | Apache-2.0 (download on first use; good default)                                                |
+| **Balanced+**   | rmbg-1.4                                               | ~176 MB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use)         |
+| **High**        | birefnet-general-lite (`birefnet-lite-512.onnx`, 512²) | ~183 MB | [MIT](https://opensource.org/licenses/MIT) (download on first use; lower VRAM than 1024 models) |
+| **Max Quality** | rmbg-2.0                                               | ~1.0 GB | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (download on first use)         |
 
 A small bundled model (`u2netp`) is used only for offline GPU/CPU **benchmarks** — it is not offered as a quality mode.
 
 ![Quality mode list](docs/screenshots/02-quality-modes.png)
 
-Downloads are verified with **SHA-256** before use and cached under the app data directory (`models/`).  
+Downloads are verified with **SHA-256** before use and cached under the app data directory (`models/`).
 
 ## How to use
 
@@ -107,15 +107,15 @@ Default output name: `{original-stem}-nobg-{modelId}.png` next to the input (or 
 
 ## Troubleshooting
 
-| Problem | What to try |
-|---------|-------------|
-| **Blank / black window (Linux)** | Launch with `WEBKIT_DISABLE_COMPOSITING_MODE=1`. Some Arch/CachyOS WebKit builds need this. |
-| **AppImage won’t start** | `chmod +x` the file. Ensure FUSE is available, extract with `./swiftmask-linux.AppImage --appimage-extract`, or install the `.deb` / `.rpm` instead. |
-| **CUDA not used (Linux)** | Install proprietary NVIDIA drivers. The title-bar chip should read **CUDA** when active. Without drivers, CPU is used automatically. |
-| **Windows SmartScreen** | Expected for unsigned builds — *More info* → *Run anyway* if you trust the release. |
-| **Download fails** | Check network access to GitHub / Hugging Face. Incomplete files are re-downloaded and re-verified. |
+| Problem                           | What to try                                                                                                                                                                                                                   |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Blank / black window (Linux)**  | Launch with `WEBKIT_DISABLE_COMPOSITING_MODE=1`. Some Arch/CachyOS WebKit builds need this.                                                                                                                                   |
+| **AppImage won’t start**          | `chmod +x` the file. Ensure FUSE is available, extract with `./swiftmask-linux.AppImage --appimage-extract`, or install the `.deb` / `.rpm` instead.                                                                          |
+| **CUDA not used (Linux)**         | Install proprietary NVIDIA drivers. The title-bar chip should read **CUDA** when active. Without drivers, CPU is used automatically.                                                                                          |
+| **Windows SmartScreen**           | Expected for unsigned builds — _More info_ → _Run anyway_ if you trust the release.                                                                                                                                           |
+| **Download fails**                | Check network access to GitHub / Hugging Face. Incomplete files are re-downloaded and re-verified.                                                                                                                            |
 | **Out of memory on large images** | Prefer **Balanced** or **High** (High runs at 512² to cut VRAM vs 1024 models). Avoid **Max Quality** on low-VRAM GPUs, or use a smaller source image. GPU OOM may automatically retry on CPU when the backend can detect it. |
-| **Need a commercial workflow** | Use **Balanced** or **High** (Apache-2.0 / MIT models). Do not use Balanced+ / Max Quality for commercial work unless you have a separate license from the model rights holder. |
+| **Need a commercial workflow**    | Use **Balanced** or **High** (Apache-2.0 / MIT models). Do not use Balanced+ / Max Quality for commercial work unless you have a separate license from the model rights holder.                                               |
 
 ## Feedback & issues
 
@@ -128,7 +128,7 @@ Report bugs and feature requests on **[GitHub Issues](https://github.com/camilop
 ### Prerequisites
 
 - [Bun](https://bun.sh) — package manager (`bun.lock` is canonical; do not commit `package-lock.json`)
-- [Rust](https://rustup.rs) 1.88+ (stable)
+- [Rust](https://rustup.rs) 1.92+ (stable)
 - Platform libraries for Tauri — see [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
 
 **Optional GPU support**
@@ -153,11 +153,11 @@ The ONNX **models are third-party works** with their own terms (see the table ab
 
 ### Model licenses and commercial use
 
-| Mode | Can end users use outputs commercially? |
-|------|----------------------------------------|
-| Balanced | Generally yes, under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) (attribution and license notice as required by Apache) |
-| High | Generally yes, under [MIT](https://opensource.org/licenses/MIT) ([birefnet-lite-512](https://huggingface.co/studioludens/birefnet-lite-512) / BiRefNet_lite) |
-| Balanced+, Max Quality | **No** — [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) allows non-commercial use only |
+| Mode                   | Can end users use outputs commercially?                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Balanced               | Generally yes, under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) (attribution and license notice as required by Apache)                        |
+| High                   | Generally yes, under [MIT](https://opensource.org/licenses/MIT) ([birefnet-lite-512](https://huggingface.co/studioludens/birefnet-lite-512) / BiRefNet_lite) |
+| Balanced+, Max Quality | **No** — [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) allows non-commercial use only                                                      |
 
 The **non-commercial restriction applies to people who use the RMBG models** (Balanced+ and Max Quality), not to publishing SwiftMask as free software. If you process images for paid work, client deliverables, product photography, or other commercial purposes, use **Balanced** or **High**, or obtain a separate commercial license from the model rights holder ([BRIA](https://bria.ai/) for RMBG-1.4 / RMBG-2.0).
 

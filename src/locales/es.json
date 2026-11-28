@@ -94,7 +94,7 @@
     },
     "fallback": {
       "title": "Terminado en CPU",
-      "body": "La GPU se quedó sin memoria ({{from}} → {{to}}). Los ajustes siguen usando la GPU en las próximas ejecuciones."
+      "body": "La GPU se quedó sin memoria ({{from}} → {{to}}). Cuando un modo se queda sin memoria de GPU, usa la CPU hasta 10 minutos; los demás modos siguen usando la GPU. Vuelve a ejecutar el benchmark en Ajustes para reintentar la GPU antes."
     },
     "firstRunGpu": {
       "title": "No se pudo completar la configuración de GPU",

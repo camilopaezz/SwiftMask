@@ -4,22 +4,24 @@ How we branch, integrate, and release SwiftMask.
 
 ## Branches
 
-| Branch | Role |
-|--------|------|
-| `main` | Production. Tagged releases only. Full CI on PRs targeting `main` (not on ordinary pushes). |
-| `dev` | Integration. Feature PRs merge here. **No CI** — you validate locally. |
-| `feature/*` | Short-lived work branches. Cut from `dev`, PR back to `dev`. |
+| Branch      | Role                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| `main`      | Production. Tagged releases only. Full CI on PRs targeting `main` (not on ordinary pushes). |
+| `dev`       | Integration. Feature PRs merge here. **No CI** — you validate locally.                      |
+| `feature/*` | Short-lived work branches. Cut from `dev`, PR back to `dev`.                                |
 
 `origin/HEAD` points at `main`. Treat `dev` as the daily integration line.
 
 ## Day-to-day (feature → dev)
 
 1. Branch from `dev`:
+
    ```bash
    git checkout dev && git pull
    git checkout -b feature/my-change
    ```
 2. Implement, run checks locally:
+
    ```bash
    bun run lint && bun run test && bun run build
    bun run typecheck:e2e && bun run typecheck:node && bun run gen:models:check
@@ -43,6 +45,7 @@ Repeat until `dev` has enough for a release.
 2. Open **PR `dev` → `main`**. **Full CI runs** (lint, unit tests, `gen:models:check`, Rust tests, Tauri bundles on Linux + Windows, mocked Playwright E2E).
 3. Merge when green and reviewed. Merging does not re-run CI — the PR run is the gate.
 4. Tag on `main` (version must match the bump):
+
    ```bash
    git checkout main && git pull
    git tag v0.2.0
@@ -61,12 +64,12 @@ In-app updates use [`tauri-plugin-updater`](https://v2.tauri.app/plugin/updater/
 
 `https://github.com/camilopaezz/SwiftMask/releases/latest/download/latest.json`
 
-| Topic | Detail |
-|-------|--------|
-| Channel | **Stable only.** GitHub `/releases/latest` ignores prereleases (`0.9.0-beta.*` etc.). Until the first **non-prerelease** tag after this lands, `check()` finds nothing — expected; betas still ship installers for manual download. |
-| Update packages | `linux-x86_64` → AppImage; `windows-x86_64` → **NSIS** setup.exe. MSI / deb / rpm stay on the release for first install / package managers but are **not** listed in `latest.json`. |
-| UX | Silent check a few seconds after launch (log-only on failure) + **Settings → Check for updates**. User confirms before download/install; then install + relaunch. No telemetry. |
-| Signing | Ed25519 updater package signatures (not Authenticode/SmartScreen). Public key is in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`. |
+| Topic           | Detail                                                                                                                                                                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Channel         | **Stable only.** GitHub `/releases/latest` ignores prereleases (`0.9.0-beta.*` etc.). Until the first **non-prerelease** tag after this lands, `check()` finds nothing — expected; betas still ship installers for manual download. |
+| Update packages | `linux-x86_64` → AppImage; `windows-x86_64` → **NSIS** setup.exe. MSI / deb / rpm stay on the release for first install / package managers but are **not** listed in `latest.json`.                                                 |
+| UX              | Silent check a few seconds after launch (log-only on failure) + **Settings → Check for updates**. User confirms before download/install; then install + relaunch. No telemetry.                                                     |
+| Signing         | Ed25519 updater package signatures (not Authenticode/SmartScreen). Public key is in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.                                                                                         |
 
 ### One-time key setup (operator)
 
@@ -127,14 +130,14 @@ Prerelease tags still attach `latest.json` (useful later for a beta endpoint); c
 
 ## CI summary
 
-| Event | Workflow | What runs |
-|-------|----------|-----------|
-| PR → `dev` | — | Nothing (manual QA) |
-| Push to `dev` | — | Nothing |
-| PR → `main` | `ci.yml` | Lint, unit tests, `gen:models:check`, `cargo test`, signed Tauri build (Linux + Windows), mocked Playwright E2E |
-| Push to `main` | — | Nothing (CI already ran on the PR) |
-| Push semver tag `vX.Y.Z` (optional `-prerelease`) on `main` | `release.yml` | Version check, signed build, `latest.json`, GitHub Release upload |
-| Manual dispatch with existing tag | `release.yml` | Re-publish a failed release without retagging |
+| Event                                                       | Workflow      | What runs                                                                                                       |
+| ----------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------- |
+| PR → `dev`                                                  | —             | Nothing (manual QA)                                                                                             |
+| Push to `dev`                                               | —             | Nothing                                                                                                         |
+| PR → `main`                                                 | `ci.yml`      | Lint, unit tests, `gen:models:check`, `cargo test`, signed Tauri build (Linux + Windows), mocked Playwright E2E |
+| Push to `main`                                              | —             | Nothing (CI already ran on the PR)                                                                              |
+| Push semver tag `vX.Y.Z` (optional `-prerelease`) on `main` | `release.yml` | Version check, signed build, `latest.json`, GitHub Release upload                                               |
+| Manual dispatch with existing tag                           | `release.yml` | Re-publish a failed release without retagging                                                                   |
 
 ## First-time setup
 

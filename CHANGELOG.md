@@ -6,6 +6,19 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ## [Unreleased]
 
+### Changed
+
+- Background removal is about twice as fast on large photos: resizing before and after the model now uses SIMD Lanczos3 (12 MP image on CPU: ~2.7 s → ~1.5 s with Balanced). Masks are visually identical.
+- Preview images decode off the main thread, so the window stays responsive while large results load
+- Development builds optimize dependencies, so processing in `tauri dev` takes about a second instead of ~20 s
+- Updated dependencies: Tauri 2.12 and plugins, ONNX Runtime 1.31 (ort rc.15), Vite 8, Vitest 5, React 19.3, i18next 27
+- The Linux CUDA execution provider is now built for **CUDA 13** (plus cuDNN 9) instead of CUDA 12
+
+### Fixed
+
+- Max Quality's registered download size is now correct (~1.0 GB, was 173 MB), so its download progress is accurate when the server does not report a file size
+- When a model runs out of GPU memory, that mode runs straight on CPU for the next 10 minutes instead of retrying the GPU on every image. On a 4 GB GPU this saves roughly 18 s per Max Quality image in a batch. Changing the execution provider or rerunning the benchmark tries the GPU again sooner.
+
 ## [1.3.0] - 2026-09-28
 
 ### Added

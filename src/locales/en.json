@@ -94,7 +94,7 @@
     },
     "fallback": {
       "title": "Finished on CPU",
-      "body": "GPU ran out of memory ({{from}} → {{to}}). Settings still use your GPU for next runs."
+      "body": "GPU ran out of memory ({{from}} → {{to}}). After a mode runs out of GPU memory, it uses CPU for up to 10 minutes; other modes still use your GPU. Re-run the benchmark in Settings to retry the GPU sooner."
     },
     "firstRunGpu": {
       "title": "Couldn't finish GPU setup",

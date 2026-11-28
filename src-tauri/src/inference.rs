@@ -3,6 +3,7 @@ use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use ndarray::Array4;
+use ort::environment::Environment;
 use ort::ep::ExecutionProviderDispatch;
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
@@ -25,6 +26,79 @@ static SESSION_CACHE: Mutex<Option<HashMap<(String, String), Session>>> = Mutex:
 
 /// Last successful use of any cached session (for idle TTL).
 static SESSION_LAST_USE: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// (model_id, ep) pairs that ran out of GPU memory. Jobs for these go straight
+/// to CPU: retrying the GPU costs a full session load (~8 s for rmbg-2.0) before
+/// failing again, and the OOM cleanup also drops the warm CPU session.
+///
+/// Entries expire after [`GPU_OOM_RETRY_AFTER`] so an OOM caused by other cached
+/// sessions holding VRAM does not pin the model to CPU for good. Also cleared by
+/// [`invalidate_all_sessions`] (EP change, benchmark, worker panic) or an app restart.
+pub struct GpuOomMemo {
+    pairs: Mutex<Vec<(String, String, Instant)>>,
+    retry_after: Duration,
+}
+
+/// How long a GPU OOM sends that model straight to CPU before the GPU is tried again.
+const GPU_OOM_RETRY_AFTER: Duration = Duration::from_secs(10 * 60);
+
+impl GpuOomMemo {
+    pub const fn new() -> Self {
+        Self::with_retry_after(GPU_OOM_RETRY_AFTER)
+    }
+
+    const fn with_retry_after(retry_after: Duration) -> Self {
+        Self {
+            pairs: Mutex::new(Vec::new()),
+            retry_after,
+        }
+    }
+
+    fn pairs(&self) -> std::sync::MutexGuard<'_, Vec<(String, String, Instant)>> {
+        self.pairs.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn contains(&self, model_id: &str, ep: &str) -> bool {
+        self.pairs().iter().any(|(m, e, at)| {
+            m == model_id && e.eq_ignore_ascii_case(ep) && at.elapsed() < self.retry_after
+        })
+    }
+
+    pub fn mark(&self, model_id: &str, ep: &str) {
+        let mut pairs = self.pairs();
+        pairs.retain(|(m, e, _)| !(m == model_id && e.eq_ignore_ascii_case(ep)));
+        pairs.push((model_id.to_string(), ep.to_string(), Instant::now()));
+    }
+
+    pub fn clear(&self) {
+        self.pairs().clear();
+    }
+}
+
+impl Default for GpuOomMemo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub static GPU_OOM_MEMO: GpuOomMemo = GpuOomMemo::new();
+
+/// ort allows a single environment per process and only keeps a weak reference,
+/// so it lives here for the life of the app. Build errors are kept as strings so
+/// every later caller sees the same failure instead of a confusing "only one
+/// environment" error on retry.
+static ORT_ENV: LazyLock<Result<Environment, String>> = LazyLock::new(|| {
+    ort::init()
+        .with_name("swiftmask")
+        .build()
+        .map_err(|e| e.to_string())
+});
+
+pub fn ort_environment() -> Result<&'static Environment, AppError> {
+    ORT_ENV
+        .as_ref()
+        .map_err(|e| crate::error::inference_error(format!("ONNX Runtime init failed: {e}")))
+}
 
 static DETECTED_VRAM: LazyLock<Option<u64>> =
     LazyLock::new(|| crate::gpu::detect_gpu().ok().and_then(|g| g.vram_bytes));
@@ -64,7 +138,7 @@ pub fn load_session_from_bytes(model_bytes: &[u8], ep: &str) -> Result<Session, 
     let opt_level = optimization_level_for_vram(*DETECTED_VRAM);
     let dml = is_directml(ep);
 
-    let mut builder = Session::builder()
+    let mut builder = Session::builder(ort_environment()?)
         .map_err(|e| crate::error::inference_error(e.to_string()))?
         .with_optimization_level(opt_level)
         .map_err(|e| crate::error::inference_error(e.to_string()))?;
@@ -92,6 +166,7 @@ pub fn load_session_from_bytes(model_bytes: &[u8], ep: &str) -> Result<Session, 
 /// still show a high working set until we trim it.
 pub fn invalidate_all_sessions() {
     release_all_sessions();
+    GPU_OOM_MEMO.clear();
 }
 
 /// Take ownership of the cache so `Session` Drop runs outside the mutex.
@@ -383,16 +458,18 @@ mod tests {
             ort::ep::CUDA::default().build().error_on_failure(),
             ort::ep::CPU::default().build(),
         ];
-        let session = Session::builder()
-            .map_err(|e| crate::error::inference_error(e.to_string()))
-            .unwrap()
-            .with_optimization_level(GraphOptimizationLevel::Level1)
-            .map_err(|e| crate::error::inference_error(e.to_string()))
-            .unwrap()
-            .with_execution_providers(providers)
-            .map_err(|e| crate::error::inference_error(e.to_string()))
-            .unwrap()
-            .commit_from_memory(U2NETP_MODEL_BYTES);
+        // rc.15+ surfaces missing CUDA runtime libs at EP registration, not only at
+        // commit, so treat either step failing as "GPU not usable here".
+        let session = (|| -> Result<Session, String> {
+            Session::builder(ort_environment().unwrap())
+                .map_err(|e| e.to_string())?
+                .with_optimization_level(GraphOptimizationLevel::Level1)
+                .map_err(|e| e.to_string())?
+                .with_execution_providers(providers)
+                .map_err(|e| e.to_string())?
+                .commit_from_memory(U2NETP_MODEL_BYTES)
+                .map_err(|e| e.to_string())
+        })();
         let mut session = match session {
             Ok(s) => s,
             Err(e) => {
@@ -590,6 +667,29 @@ mod tests {
             reloads, 1,
             "OOM must wipe sibling sessions, not only the failing key"
         );
+    }
+
+    #[test]
+    fn gpu_oom_memo_expires() {
+        let memo = GpuOomMemo::with_retry_after(Duration::ZERO);
+        memo.mark("rmbg-2.0", EP_CUDA);
+        assert!(
+            !memo.contains("rmbg-2.0", EP_CUDA),
+            "GPU is retried after the deadline"
+        );
+        let memo = GpuOomMemo::new();
+        memo.mark("rmbg-2.0", EP_CUDA);
+        assert!(memo.contains("rmbg-2.0", EP_CUDA));
+    }
+
+    #[test]
+    fn invalidate_all_sessions_forgets_gpu_oom() {
+        let _lock = lock_session_cache_for_test();
+        GPU_OOM_MEMO.mark("rmbg-2.0", EP_CUDA);
+        assert!(GPU_OOM_MEMO.contains("rmbg-2.0", "CUDA"));
+        assert!(!GPU_OOM_MEMO.contains("isnet-general-use", EP_CUDA));
+        invalidate_all_sessions();
+        assert!(!GPU_OOM_MEMO.contains("rmbg-2.0", EP_CUDA));
     }
 
     #[test]

@@ -5,7 +5,7 @@ description = "SwiftMask — local background removal desktop app"
 authors = ["SwiftMask contributors"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.92"
 default-run = "swiftmask"
 
 [lib]
@@ -20,7 +20,7 @@ path = "src/bin/gen_model_registry.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.5", features = ["protocol-asset"] }
+tauri = { version = "2.12.7", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
@@ -30,24 +30,25 @@ serde_json = "1.0"
 thiserror = "2"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp", "bmp"] }
 ndarray = "0.17"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
-sha2 = "0.10"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream"] }
+sha2 = "0.11"
 hex = "0.4"
 log = "0.4"
 env_logger = "0.11"
 tokio = { version = "1", features = ["fs", "io-util", "time", "rt", "macros", "sync"] }
 futures-util = "0.3"
-notify = "7"
-tauri-plugin-notification = "2.3.3"
+notify = "9"
+tauri-plugin-notification = "2.8.1"
 clipboard-rs = { version = "0.3.5", features = ["image", "wayland"] }
 url = "2"
+fast_image_resize = "6"
 
 [dev-dependencies]
 tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
-ort = { version = "2.0.0-rc.12", features = ["directml", "download-binaries"] }
-windows = { version = "0.58", features = [
+ort = { version = "2.0.0-rc.15", features = ["directml", "download-binaries"] }
+windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Graphics_DXCore",
     "Win32_System_ProcessStatus",
@@ -55,4 +56,14 @@ windows = { version = "0.58", features = [
 ] }
 
 [target.'cfg(not(windows))'.dependencies]
-ort = { version = "2.0.0-rc.12", features = ["cuda", "download-binaries"] }
+ort = { version = "2.0.0-rc.15", features = ["cuda", "download-binaries"] }
+
+# `tauri dev` uses the dev profile, where a 12 MP job took ~20 s unoptimized.
+# Dependencies get full optimization (built once, cached). The app crate gets
+# opt-level 1 because generic image code (blur, PNG encode, pixel loops) is
+# instantiated here, not in the dependency; level 1 keeps rebuilds quick.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

@@ -156,7 +156,7 @@ fn registry() -> &'static [ModelEntry] {
                 id: "rmbg-2.0".into(),
                 name: "Max Quality".into(),
                 file: "rmbg-2.0.onnx".into(),
-                size_bytes: 173_000_000,
+                size_bytes: 1_024_331_469,
                 input_size: 1024,
                 mean: vec![0.485, 0.456, 0.406],
                 std: vec![0.229, 0.224, 0.225],
@@ -1068,7 +1068,15 @@ mod tests {
                 download_to_file(&model, &path_for_task, |_, _| {}, Some(&s)).await
             })
         };
-        tokio::time::sleep(Duration::from_millis(30)).await;
+        // Cancel only once bytes have hit disk. A fixed sleep raced HTTP client
+        // startup (rustls platform verifier) under parallel test load.
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while !is_nonempty_file(&partial) {
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+        })
+        .await
+        .expect("download never wrote to the partial file");
         state.cancel();
         let err = dl.await.unwrap().expect_err("expected cancelled");
         assert!(is_cancelled(&err), "got {err}");
