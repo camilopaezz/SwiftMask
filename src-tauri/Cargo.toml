@@ -12,10 +12,6 @@ default-run = "swiftmask"
 name = "swiftmask_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-[[bin]]
-name = "gen_model_registry"
-path = "src/bin/gen_model_registry.rs"
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

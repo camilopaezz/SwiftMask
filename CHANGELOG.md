@@ -16,6 +16,8 @@ Version numbers must stay in sync across `package.json`, `src-tauri/Cargo.toml`,
 
 ### Fixed
 
+- Linux packages (AppImage, `.deb`, `.rpm`) now include ONNX Runtime's CUDA provider libraries. Before, installed Linux builds could not load CUDA and always ran on CPU. GPU acceleration needs the NVIDIA driver R580+, CUDA 13 and cuDNN 9.
+- Linux packages no longer install the internal `gen_model_registry` tool in `/usr/bin`
 - Max Quality's registered download size is now correct (~1.0 GB, was 173 MB), so its download progress is accurate when the server does not report a file size
 - When a model runs out of GPU memory, that mode runs straight on CPU for the next 10 minutes instead of retrying the GPU on every image. On a 4 GB GPU this saves roughly 18 s per Max Quality image in a batch. Changing the execution provider or rerunning the benchmark tries the GPU again sooner.
 

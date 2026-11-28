@@ -42,7 +42,27 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "appimage": {
+        "files": {
+          "/usr/bin/libonnxruntime_providers_shared.so": "target/release/libonnxruntime_providers_shared.so",
+          "/usr/bin/libonnxruntime_providers_cuda.so": "target/release/libonnxruntime_providers_cuda.so"
+        }
+      },
+      "deb": {
+        "files": {
+          "/usr/bin/libonnxruntime_providers_shared.so": "target/release/libonnxruntime_providers_shared.so",
+          "/usr/bin/libonnxruntime_providers_cuda.so": "target/release/libonnxruntime_providers_cuda.so"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/bin/libonnxruntime_providers_shared.so": "target/release/libonnxruntime_providers_shared.so",
+          "/usr/bin/libonnxruntime_providers_cuda.so": "target/release/libonnxruntime_providers_cuda.so"
+        }
+      }
+    }
   },
   "plugins": {
     "updater": {
